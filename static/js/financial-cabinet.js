@@ -1,20 +1,21 @@
 
 /* Kzzakupbot Hub
-   Financial Cabinet MVP — interface controller
+   Financial Cabinet MVP
+   Interface controller v1.1
 */
 (function () {
   "use strict";
 
-  const $ = (id) => document.getElementById(id);
+  const $ = function (id) {
+    return document.getElementById(id);
+  };
 
   const form = $("finDealForm");
   const calculateButton = $("finCalculate");
   const resetButton = $("finReset");
 
   if (!form || !calculateButton || !resetButton) {
-    console.error(
-      "[Financial Cabinet] Не найдена форма или кнопки. Проверьте HTML ID."
-    );
+    console.error("[Financial Cabinet] Не найдена форма или кнопки.");
     return;
   }
 
@@ -22,7 +23,7 @@
     !window.KzzFinancialModel ||
     typeof window.KzzFinancialModel.calculateDeal !== "function"
   ) {
-    showError("Расчётная модель не загружена. Проверьте financial-model.js.");
+    showError("Не загружена расчётная модель financial-model.js.");
     calculateButton.disabled = true;
     return;
   }
@@ -47,14 +48,14 @@
   function readForm() {
     const data = {};
 
-    Object.entries(fields).forEach(([key, id]) => {
-      const element = $(id);
+    Object.keys(fields).forEach(function (key) {
+      const element = $(fields[key]);
 
       if (!element) {
-        throw new Error("Не найдено поле #" + id);
+        throw new Error("Не найдено поле: " + fields[key]);
       }
 
-      data[key] = element.value === "" ? 0 : element.value;
+      data[key] = element.value;
     });
 
     return data;
@@ -66,30 +67,33 @@
     }).format(Math.round(Number(value) || 0)) + " ₸";
   }
 
-  function setValue(id, value) {
+  function setText(id, value) {
     const element = $(id);
-    if (element) element.textContent = value;
-  }
 
-  function showError(message) {
-    const error = $("finError");
-
-    if (error) {
-      error.textContent = message;
-      error.hidden = false;
-      error.style.display = "block";
-    } else {
-      console.error("[Financial Cabinet]", message);
+    if (element) {
+      element.textContent = value;
     }
   }
 
-  function clearError() {
-    const error = $("finError");
+  function showError(message) {
+    const element = $("finError");
 
-    if (error) {
-      error.textContent = "";
-      error.hidden = true;
-      error.style.display = "none";
+    if (element) {
+      element.textContent = message;
+      element.hidden = false;
+      element.style.display = "block";
+    }
+
+    console.error("[Financial Cabinet]", message);
+  }
+
+  function clearError() {
+    const element = $("finError");
+
+    if (element) {
+      element.textContent = "";
+      element.hidden = true;
+      element.style.display = "none";
     }
   }
 
@@ -107,7 +111,10 @@
 
   function renderSchedule(schedule) {
     const table = $("finSchedule");
-    if (!table) return;
+
+    if (!table) {
+      throw new Error("Не найдена таблица #finSchedule.");
+    }
 
     if (!schedule.length) {
       table.innerHTML =
@@ -116,44 +123,44 @@
     }
 
     table.innerHTML = schedule.map(function (item) {
-      return `
-        <tr>
-          <td>${item.day}</td>
-          <td>${escapeHTML(item.operations)}</td>
-          <td>${money(item.income)}</td>
-          <td>${money(item.expense)}</td>
-          <td>${money(item.debt)}</td>
-          <td>${money(item.cash)}</td>
-        </tr>
-      `;
+      return (
+        "<tr>" +
+          "<td>" + item.day + "</td>" +
+          "<td>" + escapeHTML(item.operations) + "</td>" +
+          "<td>" + money(item.income) + "</td>" +
+          "<td>" + money(item.expense) + "</td>" +
+          "<td>" + money(item.cash) + "</td>" +
+          "<td>" + money(item.debt) + "</td>" +
+        "</tr>"
+      );
     }).join("");
   }
 
   function renderResult(result) {
-    setValue("finKpiFunding", money(result.peakDebt));
-    setValue("finKpiDebt", money(result.peakDebt));
-    setValue("finKpiCost", money(result.financingCost));
-    setValue("finKpiProfit", money(result.netProfit));
+    setText("finKpiFunding", money(result.peakDebt));
+    setText("finKpiDebt", money(result.peakDebt));
+    setText("finKpiCost", money(result.financingCost));
+    setText("finKpiProfit", money(result.netProfit));
 
-    setValue("finKpiOperating", money(result.operatingProfit));
-    setValue("finKpiMargin", result.margin.toFixed(2) + "%");
-    setValue("finKpiInterest", money(result.interest));
-    setValue("finKpiFee", money(result.bankFee));
+    setText("finKpiOperating", money(result.operatingProfit));
+    setText("finKpiMargin", result.margin.toFixed(2) + "%");
+    setText("finKpiInterest", money(result.interest));
+    setText("finKpiFee", money(result.bankFee));
 
     renderSchedule(result.schedule);
 
-    setValue(
+    setText(
       "finAssumptions",
-      "Расчёт является планировочной моделью. " +
-      "Проценты начисляются на фактический долг по дням. " +
-      "Налоги, НДС и банковские ограничения не включены."
+      "Модель учитывает поступления и расходы по дням. " +
+      "Проценты начисляются на остаток долга по ставке годовых / 365. " +
+      "Комиссия рассчитывается от максимального долга."
     );
 
     const resultBlock = $("finResult");
 
     if (resultBlock) {
       resultBlock.hidden = false;
-      resultBlock.style.display = "";
+      resultBlock.style.display = "block";
     }
   }
 
@@ -169,7 +176,7 @@
       renderResult(result);
 
       console.info(
-        "[Financial Cabinet] Расчёт выполнен успешно.",
+        "[Financial Cabinet] Расчёт выполнен.",
         result
       );
 
@@ -177,21 +184,14 @@
       showError(
         error && error.message
           ? error.message
-          : "Ошибка при выполнении расчёта."
+          : "Ошибка выполнения расчёта."
       );
-
-      console.error("[Financial Cabinet]", error);
     }
   }
 
-  // Обработка нажатия кнопки.
+  // Кнопка запускает расчёт напрямую.
   calculateButton.addEventListener("click", function (event) {
     event.preventDefault();
-
-    if (calculateButton.type === "submit") {
-      return;
-    }
-
     calculate();
   });
 
@@ -201,7 +201,7 @@
     calculate();
   });
 
-  // Сброс формы и результатов.
+  // Сброс результатов.
   resetButton.addEventListener("click", function (event) {
     event.preventDefault();
 
@@ -225,7 +225,7 @@
       "finKpiInterest",
       "finKpiFee"
     ].forEach(function (id) {
-      setValue(id, "—");
+      setText(id, "—");
     });
 
     const table = $("finSchedule");
@@ -234,11 +234,11 @@
       table.innerHTML = "";
     }
 
-    setValue("finAssumptions", "");
+    setText("finAssumptions", "");
 
-    console.info("[Financial Cabinet] Форма сброшена.");
+    console.info("[Financial Cabinet] Данные сброшены.");
   });
 
-  console.info("[Financial Cabinet] Модуль интерфейса инициализирован.");
+  console.info("[Financial Cabinet] Модуль успешно подключён.");
 
 })();
