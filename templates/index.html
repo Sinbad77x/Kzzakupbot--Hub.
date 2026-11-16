@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -5,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Kzzakupbot Hub</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financial-cabinet.css') }}">
 </head>
 <body>
 <nav>
@@ -120,16 +122,48 @@
 </section>
 
 <section id="fin">
-<h2>Фин. кабинет поставщика <span class="badge">В разработке</span></h2>
-<div class="card">
-<p>Модуль комплексного аналитического планирования тендерных сделок. Функционал находится на этапе проектирования:</p>
-<ul><li>Планирование оборотного капитала</li><li>Расчёт кассового разрыва</li><li>Оценка стоимости финансирования</li><li>Финансовое планирование тендерной сделки</li></ul>
-<p class="mut">Персональные кабинеты, авторизация и сохранение расчётов в будущих версиях не задействованы.</p>
-</div>
+  <h2>Фин. кабинет поставщика <span class="badge">MVP</span></h2>
+  <p class="mut">Планирование оборотного капитала, кассового разрыва и стоимости финансирования тендерной сделки.</p>
+  <form id="finDealForm">
+    <div class="fin-panel"><h3>1. Параметры сделки</h3><div class="fin-grid">
+      <label>Цена контракта, ₸<input id="finContractAmount" type="number" min="1" step="1" value="6500000" required></label>
+      <label>Закупочная стоимость, ₸<input id="finPurchaseCost" type="number" min="0" step="1" value="5000000" required></label>
+      <label>Логистика, ₸<input id="finLogisticsCost" type="number" min="0" step="1" value="0"></label>
+      <label>Прочие расходы, ₸<input id="finOtherCost" type="number" min="0" step="1" value="0"></label>
+      <label>Собственные средства, ₸<input id="finOwnFunds" type="number" min="0" step="1" value="1000000"></label>
+      <label>Начальный остаток на счёте, ₸<input id="finStartingBalance" type="number" step="1" value="0"></label>
+    </div></div>
+    <div class="fin-panel"><h3>2. График поступлений и расходов</h3><div class="fin-grid">
+      <label>Аванс заказчика, %<input id="finAdvancePercent" type="number" min="0" max="100" step="0.1" value="0"></label>
+      <label>День поступления аванса<input id="finAdvanceDay" type="number" min="0" step="1" value="0"></label>
+      <label>День закупки<input id="finPurchaseDay" type="number" min="0" step="1" value="1"></label>
+      <label>День оплаты логистики<input id="finLogisticsDay" type="number" min="0" step="1" value="1"></label>
+      <label>День прочих расходов<input id="finOtherDay" type="number" min="0" step="1" value="1"></label>
+      <label>День окончательной оплаты<input id="finPaymentDay" type="number" min="0" step="1" value="50"></label>
+    </div><p class="fin-hint">День 0 — дата начала сделки. Поступления и расходы одного дня суммируются; внутридневная очерёдность платежей пока не моделируется.</p></div>
+    <div class="fin-panel"><h3>3. Условия финансирования</h3><div class="fin-grid">
+      <label>Годовая ставка, %<input id="finAnnualRate" type="number" min="0" max="1000" step="0.01" value="20"></label>
+      <label>Разовая комиссия от максимального долга, %<input id="finFeePercent" type="number" min="0" max="100" step="0.01" value="1"></label>
+    </div><p class="fin-hint">Ставка и комиссия — вводимые допущения, а не предложение конкретного банка.</p></div>
+    <div class="fin-actions"><button id="finCalculate" type="submit">Рассчитать сделку</button><button id="finReset" type="button" class="fin-secondary">Сбросить</button></div>
+    <p id="finError" class="fin-error" role="alert"></p>
+  </form>
+  <div id="finResult" hidden>
+    <div class="fin-panel"><h3>4. Результаты</h3><div class="fin-kpis">
+      <article><span>Максимальный кассовый разрыв</span><strong id="finKpiFunding">—</strong></article>
+      <article><span>Пиковая потребность в долге</span><strong id="finKpiDebt">—</strong></article>
+      <article><span>Стоимость финансирования</span><strong id="finKpiCost">—</strong></article>
+      <article><span>Прибыль после финансирования</span><strong id="finKpiProfit">—</strong></article>
+    </div><div class="fin-details"><p>Операционная прибыль: <b id="finKpiOperating"></b></p><p>Рентабельность: <b id="finKpiMargin"></b></p><p>Проценты: <b id="finKpiInterest"></b></p><p>Разовая комиссия: <b id="finKpiFee"></b></p></div></div>
+    <div class="fin-panel"><h3>5. Календарь движения денег</h3><div class="fin-table-wrap"><table><thead><tr><th>День</th><th>Операции</th><th>Поступления</th><th>Расходы</th><th>Остаток*</th><th>Дефицит</th></tr></thead><tbody id="finSchedule"></tbody></table></div><p class="fin-hint">* Остаток учитывает начальный остаток и собственные средства. Отрицательное значение — сумма, которую нужно профинансировать.</p><p id="finAssumptions" class="fin-hint"></p></div>
+  </div>
+  <p class="fin-disclaimer">Предварительная модель: не учитывает налоги, НДС, банковские гарантии, задержки приёмки, изменение цены и реальные ограничения кредитного продукта. Проценты начисляются по ежедневному остатку долга по простой годовой ставке / 365; разовая комиссия рассчитывается от пикового долга. Не является банковским предложением или бухгалтерским заключением.</p>
 </section>
 
 <p class="dis">Правовой дисклеймер: Kzzakupbot Hub является независимым информационно-аналитическим сервисом. Платформа не является государственным органом, финансовым учреждением или банком, не проводит государственные закупки и не гарантирует победу в тендерах или одобрение банковских гарантий.<br>© 2026 Kzzakupbot Hub. Все права защищены.</p>
 </main>
+<script src="{{ url_for('static', filename='js/financial-model.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/financial-cabinet.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 </body>
 </html>
