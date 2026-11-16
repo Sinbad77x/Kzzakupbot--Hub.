@@ -1,6 +1,7 @@
 
 /* Kzzakupbot Hub
-   Financial Cabinet MVP — calculation engine
+   Financial Cabinet MVP
+   Calculation engine v1.1
 */
 (function (global) {
   "use strict";
@@ -8,67 +9,80 @@
   const DAYS_IN_YEAR = 365;
 
   function toNumber(value, name) {
-    const number = Number(value ?? 0);
+    const n = Number(value);
 
-    if (!Number.isFinite(number) || number < 0) {
-      throw new Error(name + ": некорректное значение.");
+    if (!Number.isFinite(n) || n < 0) {
+      throw new Error(name + ": укажите корректное неотрицательное число.");
     }
 
-    return number;
+    return n;
   }
 
   function toDay(value, name) {
-    const day = toNumber(value, name);
+    const n = toNumber(value, name);
 
-    if (!Number.isInteger(day)) {
+    if (!Number.isInteger(n)) {
       throw new Error(name + ": укажите целое число дней.");
     }
 
-    return day;
+    return n;
+  }
+
+  function round(value) {
+    return Math.round((value + Number.EPSILON) * 100) / 100;
   }
 
   function calculateDeal(input) {
+    input = input || {};
+
     const contract = toNumber(input.contractAmount, "Цена контракта");
     const purchase = toNumber(input.purchaseCost, "Закупка");
-    const logistics = toNumber(input.logisticsCost, "Логистика");
-    const other = toNumber(input.otherCost, "Прочие расходы");
-    const ownFunds = toNumber(input.ownFunds, "Собственные средства");
+    const logistics = toNumber(input.logisticsCost || 0, "Логистика");
+    const other = toNumber(input.otherCost || 0, "Прочие расходы");
+
+    const ownFunds = toNumber(input.ownFunds || 0, "Собственные средства");
     const openingBalance = toNumber(
-      input.startingBalance,
+      input.startingBalance || 0,
       "Начальный остаток"
     );
 
     const advancePercent = toNumber(
-      input.advancePercent,
+      input.advancePercent || 0,
       "Аванс"
     );
 
     const annualRate = toNumber(
-      input.annualRate,
+      input.annualRate || 0,
       "Годовая ставка"
     );
 
     const feePercent = toNumber(
-      input.feePercent,
+      input.feePercent || 0,
       "Комиссия"
     );
 
-    if (advancePercent > 100 || feePercent > 100) {
-      throw new Error("Процент не может превышать 100%.");
+    if (contract <= 0) {
+      throw new Error("Цена контракта должна быть больше нуля.");
     }
 
-    const advanceDay = toDay(input.advanceDay, "День аванса");
-    const purchaseDay = toDay(input.purchaseDay, "День закупки");
-    const logisticsDay = toDay(input.logisticsDay, "День логистики");
-    const otherDay = toDay(input.otherDay, "День прочих расходов");
-    const paymentDay = toDay(input.paymentDay, "День оплаты");
+    if (advancePercent > 100 || feePercent > 100) {
+      throw new Error("Процент не может превышать 100.");
+    }
 
-    if (paymentDay < advanceDay ||
-        paymentDay < purchaseDay ||
-        paymentDay < logisticsDay ||
-        paymentDay < otherDay) {
+    const advanceDay = toDay(input.advanceDay || 0, "День аванса");
+    const purchaseDay = toDay(input.purchaseDay || 0, "День закупки");
+    const logisticsDay = toDay(input.logisticsDay || 0, "День логистики");
+    const otherDay = toDay(input.otherDay || 0, "День прочих расходов");
+    const paymentDay = toDay(input.paymentDay || 0, "День окончательной оплаты");
+
+    if (
+      advanceDay > paymentDay ||
+      purchaseDay > paymentDay ||
+      logisticsDay > paymentDay ||
+      otherDay > paymentDay
+    ) {
       throw new Error(
-        "День окончательной оплаты не может быть раньше операций."
+        "Окончательная оплата не может быть раньше остальных операций."
       );
     }
 
@@ -76,7 +90,7 @@
 
     function addEvent(day, income, expense, title) {
       const event = events.get(day) || {
-        day,
+        day: day,
         income: 0,
         expense: 0,
         operations: []
@@ -109,7 +123,7 @@
       "Окончательная оплата"
     );
 
-    const days = [...events.keys()].sort((a, b) => a - b);
+    const days = Array.from(events.keys()).sort((a, b) => a - b);
 
     let cash = openingBalance + ownFunds;
     let debt = 0;
@@ -122,8 +136,7 @@
     for (const day of days) {
       const elapsedDays = day - previousDay;
 
-      interest +=
-        debt * (annualRate / 100) *
+      interest += debt * annualRate / 100 *
         elapsedDays / DAYS_IN_YEAR;
 
       const event = events.get(day);
@@ -142,19 +155,19 @@
       peakDebt = Math.max(peakDebt, debt);
 
       schedule.push({
-        day,
+        day: day,
         operations: event.operations.join(", "),
         income: round(event.income),
         expense: round(event.expense),
-        debt: round(debt),
-        cash: round(cash)
+        cash: round(cash),
+        debt: round(debt)
       });
 
       previousDay = day;
     }
 
-    const operatingProfit =
-      contract - purchase - logistics - other;
+    const totalCosts = purchase + logistics + other;
+    const operatingProfit = contract - totalCosts;
 
     const bankFee = peakDebt * feePercent / 100;
     const financingCost = interest + bankFee;
@@ -162,26 +175,20 @@
 
     return {
       contractAmount: round(contract),
-      totalCosts: round(purchase + logistics + other),
+      totalCosts: round(totalCosts),
       operatingProfit: round(operatingProfit),
       peakDebt: round(peakDebt),
       interest: round(interest),
       bankFee: round(bankFee),
       financingCost: round(financingCost),
       netProfit: round(netProfit),
-      margin: contract > 0
-        ? round(netProfit / contract * 100)
-        : 0,
-      schedule
+      margin: round(netProfit / contract * 100),
+      schedule: schedule
     };
   }
 
-  function round(value) {
-    return Math.round((value + Number.EPSILON) * 100) / 100;
-  }
-
   global.KzzFinancialModel = {
-    calculateDeal
+    calculateDeal: calculateDeal
   };
 
 })(typeof window !== "undefined" ? window : globalThis);
