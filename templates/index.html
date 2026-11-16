@@ -5,163 +5,646 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Kzzakupbot Hub</title>
+
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/financial-cabinet.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tender-live.css') }}">
+
 </head>
 <body>
+
 <nav>
-<a href="#zakupki">Закупки</a><a href="#calc">Калькулятор</a><a href="#banks">Банки и гарантии</a><a href="#academy">Академия</a><a href="#fin">Фин. кабинет</a>
+<a href="#zakupki">Закупки</a>
+<a href="#calc">Калькулятор</a>
+<a href="#banks">Банки и гарантии</a>
+<a href="#academy">Академия</a>
+<a href="#fin">Фин. кабинет</a>
 </nav>
+
+<!-- TENDER LIVE -->
+<section id="tender-live">
+
+    <div class="tender-live-header">
+        <div>
+            <div class="tender-live-heading">
+                <span class="tender-live-dot"></span>
+                <h2>TENDER LIVE</h2>
+            </div>
+
+            <div class="tender-live-meta">
+                Государственные закупки Казахстана
+            </div>
+        </div>
+
+        <button id="tenderLiveRefresh" type="button">
+            ↻ Обновить
+        </button>
+    </div>
+
+    <p id="tenderLiveStatus" class="tender-live-status">
+        Подключение к официальному порталу...
+    </p>
+
+    <div id="tenderLiveUpdated" class="tender-live-meta"></div>
+
+    <div id="tenderLiveItems" class="tender-live-grid">
+        <div class="tender-live-empty">
+            Загружаем объявления...
+        </div>
+    </div>
+
+</section>
+<!-- END TENDER LIVE -->
+
 <main>
+
 <h1>🇰🇿 Kzzakupbot Hub</h1>
-<p class="mut">Централизованная экосистема для работы с тендерами, закупками и финансовыми инструментами Казахстана.</p>
+
+<p class="mut">
+Централизованная экосистема для работы с тендерами, закупками и финансовыми инструментами Казахстана.
+</p>
+
 <section id="zakupki">
+
 <h2>Поиск лотов и официальные площадки РК</h2>
-<p class="mut">Навигация по официальным государственным и корпоративным порталам закупщиков Казахстана</p>
+
+<p class="mut">
+Навигация по официальным государственным и корпоративным порталам закупщиков Казахстана
+</p>
+
 <div class="grid">
-<div class="card portal"><span>Госзакупки РК</span><a class="link" href="https://goszakup.gov.kz/" target="_blank" rel="noopener">Открыть →</a></div>
-<div class="card portal"><span>Самрук-Казына</span><a class="link" href="https://zakup.sk.kz/" target="_blank" rel="noopener">Открыть →</a></div>
-<div class="card portal"><span>СК-Фармация</span><a class="link" href="https://skmed.ecc.kz/" target="_blank" rel="noopener">Открыть →</a></div>
-<div class="card portal"><span>Mitwork</span><a class="link" href="https://eep.mitwork.kz/" target="_blank" rel="noopener">Открыть →</a></div>
-<div class="card portal"><span>ФСМС</span><a class="link" href="https://fms.ecc.kz/" target="_blank" rel="noopener">Открыть →</a></div>
+
+<div class="card portal">
+<span>Госзакупки РК</span>
+<a class="link" href="https://goszakup.gov.kz/" target="_blank" rel="noopener">Открыть →</a>
+</div>
+
+<div class="card portal">
+<span>Самрук-Казына</span>
+<a class="link" href="https://zakup.sk.kz/" target="_blank" rel="noopener">Открыть →</a>
+</div>
+
+<div class="card portal">
+<span>СК-Фармация</span>
+<a class="link" href="https://skmed.ecc.kz/" target="_blank" rel="noopener">Открыть →</a>
+</div>
+
+<div class="card portal">
+<span>Mitwork</span>
+<a class="link" href="https://eep.mitwork.kz/" target="_blank" rel="noopener">Открыть →</a>
+</div>
+
+<div class="card portal">
+<span>ФСМС</span>
+<a class="link" href="https://fms.ecc.kz/" target="_blank" rel="noopener">Открыть →</a>
+</div>
+
 </div>
 </section>
+
+
 <section id="calc">
+
 <h2>Тендерный калькулятор</h2>
-<p class="mut">Расчёт себестоимости, маржи, налогов (НДС, СНР, КПН/ИПН), обеспечений и комиссий банков.</p>
+
+<p class="mut">
+Расчёт себестоимости, маржи, налогов (НДС, СНР, КПН/ИПН), обеспечений и комиссий банков.
+</p>
+
 <div class="two">
+
 <div class="card">
-<label for="cost">Себестоимость товара/услуги, ₸</label><input id="cost" type="number" inputmode="decimal" value="1000000">
-<label for="mk">Желаемая наценка, %</label><input id="mk" type="number" inputmode="decimal" value="25">
+
+<label for="cost">Себестоимость товара/услуги, ₸</label>
+<input id="cost" type="number" inputmode="decimal" value="1000000">
+
+<label for="mk">Желаемая наценка, %</label>
+<input id="mk" type="number" inputmode="decimal" value="25">
+
 <label for="tax">Налоговый режим</label>
+
 <select id="tax">
 <option value="snr">СНР на основе упрощённой декларации</option>
 <option value="vat">ОУР — плательщик НДС</option>
 <option value="novat">ОУР — без НДС</option>
 </select>
+
 <div id="snrFields">
-<label for="snrRate">Ставка СНР, % (базовая — 4%; допустимый диапазон 2–6%)</label>
+
+<label for="snrRate">
+Ставка СНР, % (базовая — 4%; допустимый диапазон 2–6%)
+</label>
+
 <input id="snrRate" type="number" inputmode="decimal" min="2" max="6" step="0.1" value="4">
+
 </div>
+
 <div id="generalFields">
+
 <label for="legalForm">Организационная форма</label>
-<select id="legalForm"><option value="too">ТОО (базовый КПН 20%)</option><option value="ip">ИП (базовый ИПН 10% в пределах порога)</option></select>
+
+<select id="legalForm">
+<option value="too">ТОО (базовый КПН 20%)</option>
+<option value="ip">ИП (базовый ИПН 10% в пределах порога)</option>
+</select>
+
 <label for="incomeRate">Расчётная ставка КПН / ИПН, % (можно изменить)</label>
+
 <input id="incomeRate" type="number" inputmode="decimal" min="0" max="100" step="0.1" value="20">
+
 </div>
+
 <div id="vatFields">
+
 <label for="vatRate">Ставка НДС, % (базовая — 16%)</label>
 <input id="vatRate" type="number" inputmode="decimal" min="0" max="100" step="0.1" value="16">
+
 <label for="inputVat">Входящий НДС к зачёту, ₸</label>
 <input id="inputVat" type="number" inputmode="decimal" min="0" value="0">
+
 </div>
-<label for="bid">Обеспечение заявки, %</label><input id="bid" type="number" inputmode="decimal" min="0" step="0.01" value="1">
-<label for="ctr">Обеспечение исполнения договора, %</label><input id="ctr" type="number" inputmode="decimal" min="0" step="0.01" value="3">
-<label for="fee">Комиссия банка за гарантию, %</label><input id="fee" type="number" inputmode="decimal" min="0" step="0.01" value="2">
-<label for="minFee">Минимальная комиссия банка, ₸ (если предусмотрена тарифом)</label><input id="minFee" type="number" inputmode="decimal" min="0" value="0">
+
+<label for="bid">Обеспечение заявки, %</label>
+<input id="bid" type="number" inputmode="decimal" min="0" step="0.01" value="1">
+
+<label for="ctr">Обеспечение исполнения договора, %</label>
+<input id="ctr" type="number" inputmode="decimal" min="0" step="0.01" value="3">
+
+<label for="fee">Комиссия банка за гарантию, %</label>
+<input id="fee" type="number" inputmode="decimal" min="0" step="0.01" value="2">
+
+<label for="minFee">Минимальная комиссия банка, ₸ (если предусмотрена тарифом)</label>
+<input id="minFee" type="number" inputmode="decimal" min="0" value="0">
+
 <button id="go" type="button">Рассчитать сделку</button>
+
 </div>
+
 <div class="card" id="res" aria-live="polite"></div>
+
 </div>
-<p class="mut" style="margin-top:8px;font-size:13px">Ориентировочная модель, не налоговая декларация. Для СНР налог рассчитывается с дохода (цены без НДС), а не с прибыли; базовая ставка — 4%, маслихат вправе установить ставку в диапазоне 2–6%. Не моделируется уменьшение объекта налогообложения на отдельные расходы на оплату труда при достижении предусмотренного Кодексом порога. При ОУР налог на прибыль/доход рассчитывается отдельно от НДС.
+
+<p class="mut" style="margin-top:8px;font-size:13px">
+Ориентировочная модель, не налоговая декларация. Для СНР налог рассчитывается с дохода (цены без НДС), а не с прибыли; базовая ставка — 4%, маслихат вправе установить ставку в диапазоне 2–6%. Не моделируется уменьшение объекта налогообложения на отдельные расходы на оплату труда при достижении предусмотренного Кодексом порога. При ОУР налог на прибыль/доход рассчитывается отдельно от НДС.
+
 Для режима с НДС цена предложения вводится без НДС; входящий НДС к зачёту укажите вручную. Себестоимость в модели считается без возмещаемого НДС. Расчёт КПН/ИПН — упрощённая оценка: для ИП на ОУР не моделируется прогрессивная шкала при превышении порога 230 000 МРП; не учитываются все налоговые корректировки, вычеты, социальные платежи и специальные ставки. Обеспечения показаны как суммы блокировки/гарантий, а не как расход.
+
 Минимальная комиссия применяется к сумме обеих гарантий одним значением; банк может рассчитывать комиссии отдельно по продуктам и срокам. Перед использованием проверьте применимость режима, региональную ставку и тарифы банка. Проверка нормативных ставок: 16.11.2026.
-<a class="link" href="https://www.gov.kz/org/kgd-vko/press/news/details/1288957?lang=ru" target="_blank" rel="noopener">КГД: СНР 4% и диапазон 2–6%</a> · <a class="link" href="https://www.gov.kz/org/kgd-abay/press/news/details/1115507?lang=ru" target="_blank" rel="noopener">КГД: НДС с 2026 года</a>.</p>
-</section>
-<section id="banks">
-<h2>Банки и гарантии</h2>
-<p class="mut">Оформление бланковых гарантий, открытие спецсчетов и расчетно-кассовое обслуживание</p>
-<div class="grid">
-<div class="card"><b>🟡 Kaspi Business</b><span class="badge">Условия уточняются</span>
-<p class="mut">Проверено 16.11.2026. Сведения о конкретном тарифе, комиссии и лимите тендерной гарантии не подтверждены открытой тарифной страницей. Не используйте неподтверждённые цифры для расчёта сделки.</p>
-<ul><li>Проверяйте доступность продукта в Kaspi Pay / Kaspi Business</li><li>До оформления запросите тариф, минимальную комиссию и срок действия гарантии</li><li>Отдельно уточните, поддерживается ли нужный закупочный портал</li></ul>
-<a class="link" href="https://kaspi.kz/business" target="_blank" rel="noopener">Официальный сайт →</a></div>
-<div class="card"><b>🟢 Halyk Bank (Бизнес)</b><span class="badge">Цифровые гарантии</span>
-<p class="mut">Проверено 16.11.2026 по опубликованной странице цифровой бланковой тендерной гарантии.</p>
-<ul><li>Лимит: до 200 млн ₸; одна гарантия — до 100 млн ₸</li><li>Тариф: до 5 млн ₸ — 2% (минимум 13 000 ₸); свыше 5 млн ₸ — 1,8%, с учётом НДС</li><li>Для пакета «Тендер» действуют отдельные условия и бесплатные первые гарантии при соблюдении лимитов</li></ul>
-<a class="link" href="https://halykbank.kz/business/garanty/tendernaya-garantiya" target="_blank" rel="noopener">Официальный тариф →</a></div>
-<div class="card"><b>🔵 Банк ЦентрКредит (БЦК)</b><span class="badge">Онлайн-гарантии</span>
-<p class="mut">Проверено 16.11.2026 по официальной странице BCC Business.</p>
-<ul><li>Онлайн-бланковый лимит: до 350 млн ₸; для ИП до 50 млн ₸ и ТОО/АО до 100 млн ₸ без анализа оборотов в рамках указанных банком условий</li><li>Комиссия за выпуск: 1,7% от суммы гарантии, минимум 10 000 ₸</li><li>Срок выпуска зависит от способа обеспечения и продукта; банк указывает до 5–10 минут для ряда онлайн-гарантий</li></ul>
-<a class="link" href="https://www.bcc.kz/business/loans/tender-guarantees/" target="_blank" rel="noopener">Официальный тариф →</a></div>
-</div>
-</section>
-<section id="academy">
-<h2>Бесплатная академия поставщика</h2>
-<p class="mut">Информационные материалы и проверенные образовательные ресурсы для участников закупок</p>
-<div class="grid">
-<div class="card"><b>1. Основы государственных закупок</b><p class="mut">Базовые принципы законодательства, правила участия и терминология.</p></div>
-<div class="card"><b>2. Участие в закупках Самрук-Казына</b><p class="mut">Правила холдинга и предварительный квалификационный отбор (ПКО).</p></div>
-<div class="card"><b>3. Подготовка и подача заявок</b><p class="mut">Защита от отклонений по формальным признакам и типичные ошибки.</p></div>
-<div class="card"><b>4. Банковские гарантии</b><p class="mut">Порядок оформления обеспечений и предотвращение кассовых разрывов.</p></div>
-<div class="card"><b>5. Налоги и финансовая грамотность поставщика</b><p class="mut">Особенности налогообложения поставщиков (НДС, СНР, КПН/ИПН).</p></div>
-<div class="card"><b>6. Исполнение договора, логистика и управление контрактом</b><p class="mut">Акты выполненных работ и логистические риски.</p></div>
-</div>
-<p style="margin-top:12px"><b>Внешние ресурсы:</b> <a class="link" href="https://skills.enbek.kz/" target="_blank" rel="noopener">Skills Enbek</a> · <a class="link" href="https://atameken.kz/" target="_blank" rel="noopener">НПП РК «Атамекен»</a> · <a class="link" href="https://sk.kz/" target="_blank" rel="noopener">Самрук-Казына</a></p>
-<div class="cat" id="catalog">
-<h3>Каталог образовательных программ</h3>
-<p class="mut">Сведения сверены с официальными страницами организаторов на дату проверки. Kzzakupbot Hub не связан партнёрством с перечисленными организациями. Стоимость и условия обучения уточняйте на официальном сайте организатора. Если параметр не показан, он не подтверждён на сайте.</p>
-<div class="flt">
-<div style="grid-column:1/-1"><label for="q">Поиск</label><input id="q" type="search" placeholder="Название, организатор, тема"></div>
-<div><label for="fc">Категория</label><select id="fc"><option value="">Все</option><option value="1">Государственные закупки и тендеры</option><option value="2">Самрук-Қазына и недропользователи</option><option value="3">Корпоративное право и договорная работа</option><option value="4">Корпоративное управление и комплаенс</option><option value="5">Бухгалтерия, налоги и МСФО</option><option value="6">Финансовый менеджмент и инвестиции</option><option value="7">Предпринимательство и управление бизнесом</option></select></div>
-<div><label for="ft">Тип источника</label><select id="ft"><option value="">Все</option><option value="direct">Прямой организатор</option><option value="agg">Агрегатор</option><option value="unv">Данные не подтверждены</option></select></div>
-<div><label for="ff">Формат</label><select id="ff"><option value="">Все</option><option value="online">Онлайн</option><option value="offline">Офлайн</option></select></div>
-<div><label for="fl">Язык</label><select id="fl"><option value="">Все</option><option value="ru">Русский</option><option value="kk">Казахский</option><option value="en">Английский</option></select></div>
-<div><label for="fs">Набор</label><select id="fs"><option value="">Все</option><option value="open">Есть запись/заявка на странице</option><option value="unk">Статус не подтверждён</option></select></div>
-<div><label for="so">Сортировка</label><select id="so"><option value="">По умолчанию</option><option value="dur">По длительности</option><option value="date">По дате проверки</option></select></div>
-</div>
-<p class="note" id="cnt"></p>
-<div class="grid pc-list" id="plist"></div>
-<p class="note" id="empty" hidden>Нет программ по выбранным фильтрам.</p>
-<p class="note">«Записаться» ведёт на страницу, где у организатора расположена форма или кнопка заявки; отдельных адресов регистрации там нет. Длительность в часах и днях/месяцах несопоставима: при сортировке программы без часов идут в конце.</p>
-<h3 style="margin-top:22px">Источники (20)</h3>
-<div id="srcs" class="grid"></div>
-</div>
-</section>
-<section id="fin">
-  <h2>Фин. кабинет поставщика <span class="badge">MVP</span></h2>
-  <p class="mut">Планирование оборотного капитала, кассового разрыва и стоимости финансирования тендерной сделки.</p>
-  <form id="finDealForm">
-    <div class="fin-panel"><h3>1. Параметры сделки</h3><div class="fin-grid">
-      <label>Цена контракта, ₸<input id="finContractAmount" type="number" min="1" step="1" value="6500000" required></label>
-      <label>Закупочная стоимость, ₸<input id="finPurchaseCost" type="number" min="0" step="1" value="5000000" required></label>
-      <label>Логистика, ₸<input id="finLogisticsCost" type="number" min="0" step="1" value="0"></label>
-      <label>Прочие расходы, ₸<input id="finOtherCost" type="number" min="0" step="1" value="0"></label>
-      <label>Собственные средства, ₸<input id="finOwnFunds" type="number" min="0" step="1" value="1000000"></label>
-      <label>Начальный остаток на счёте, ₸<input id="finStartingBalance" type="number" step="1" value="0"></label>
-    </div></div>
-    <div class="fin-panel"><h3>2. График поступлений и расходов</h3><div class="fin-grid">
-      <label>Аванс заказчика, %<input id="finAdvancePercent" type="number" min="0" max="100" step="0.1" value="0"></label>
-      <label>День поступления аванса<input id="finAdvanceDay" type="number" min="0" step="1" value="0"></label>
-      <label>День закупки<input id="finPurchaseDay" type="number" min="0" step="1" value="1"></label>
-      <label>День оплаты логистики<input id="finLogisticsDay" type="number" min="0" step="1" value="1"></label>
-      <label>День прочих расходов<input id="finOtherDay" type="number" min="0" step="1" value="1"></label>
-      <label>День окончательной оплаты<input id="finPaymentDay" type="number" min="0" step="1" value="50"></label>
-    </div><p class="fin-hint">День 0 — дата начала сделки. Поступления и расходы одного дня суммируются; внутридневная очерёдность платежей пока не моделируется.</p></div>
-    <div class="fin-panel"><h3>3. Условия финансирования</h3><div class="fin-grid">
-      <label>Годовая ставка, %<input id="finAnnualRate" type="number" min="0" max="1000" step="0.01" value="20"></label>
-      <label>Разовая комиссия от максимального долга, %<input id="finFeePercent" type="number" min="0" max="100" step="0.01" value="1"></label>
-    </div><p class="fin-hint">Ставка и комиссия — вводимые допущения, а не предложение конкретного банка.</p></div>
-    <div class="fin-actions"><button id="finCalculate" type="submit">Рассчитать сделку</button><button id="finReset" type="button" class="fin-secondary">Сбросить</button></div>
-    <p id="finError" class="fin-error" role="alert"></p>
-  </form>
-  <div id="finResult" hidden>
-    <div class="fin-panel"><h3>4. Результаты</h3><div class="fin-kpis">
-      <article><span>Максимальный кассовый разрыв</span><strong id="finKpiFunding">—</strong></article>
-      <article><span>Пиковая потребность в долге</span><strong id="finKpiDebt">—</strong></article>
-      <article><span>Стоимость финансирования</span><strong id="finKpiCost">—</strong></article>
-      <article><span>Прибыль после финансирования</span><strong id="finKpiProfit">—</strong></article>
-    </div><div class="fin-details"><p>Операционная прибыль: <b id="finKpiOperating"></b></p><p>Рентабельность: <b id="finKpiMargin"></b></p><p>Проценты: <b id="finKpiInterest"></b></p><p>Разовая комиссия: <b id="finKpiFee"></b></p></div></div>
-    <div class="fin-panel"><h3>5. Календарь движения денег</h3><div class="fin-table-wrap"><table><thead><tr><th>День</th><th>Операции</th><th>Поступления</th><th>Расходы</th><th>Остаток*</th><th>Дефицит</th></tr></thead><tbody id="finSchedule"></tbody></table></div><p class="fin-hint">* Остаток учитывает начальный остаток и собственные средства. Отрицательное значение — сумма, которую нужно профинансировать.</p><p id="finAssumptions" class="fin-hint"></p></div>
-  </div>
-  <p class="fin-disclaimer">Предварительная модель: не учитывает налоги, НДС, банковские гарантии, задержки приёмки, изменение цены и реальные ограничения кредитного продукта. Проценты начисляются по ежедневному остатку долга по простой годовой ставке / 365; разовая комиссия рассчитывается от пикового долга. Не является банковским предложением или бухгалтерским заключением.</p>
+
+<a class="link" href="https://www.gov.kz/org/kgd-vko/press/news/details/1288957?lang=ru" target="_blank" rel="noopener">КГД: СНР 4% и диапазон 2–6%</a> ·
+<a class="link" href="https://www.gov.kz/org/kgd-abay/press/news/details/1115507?lang=ru" target="_blank" rel="noopener">КГД: НДС с 2026 года</a>.
+</p>
+
 </section>
 
-<p class="dis">Правовой дисклеймер: Kzzakupbot Hub является независимым информационно-аналитическим сервисом. Платформа не является государственным органом, финансовым учреждением или банком, не проводит государственные закупки и не гарантирует победу в тендерах или одобрение банковских гарантий.<br>© 2026 Kzzakupbot Hub. Все права защищены.</p>
+
+<section id="banks">
+
+<h2>Банки и гарантии</h2>
+
+<p class="mut">
+Оформление бланковых гарантий, открытие спецсчетов и расчетно-кассовое обслуживание
+</p>
+
+<div class="grid">
+
+<div class="card">
+<b>🟡 Kaspi Business</b>
+<span class="badge">Условия уточняются</span>
+
+<p class="mut">
+Проверено 16.11.2026. Сведения о конкретном тарифе, комиссии и лимите тендерной гарантии не подтверждены открытой тарифной страницей. Не используйте неподтверждённые цифры для расчёта сделки.
+</p>
+
+<ul>
+<li>Проверяйте доступность продукта в Kaspi Pay / Kaspi Business</li>
+<li>До оформления запросите тариф, минимальную комиссию и срок действия гарантии</li>
+<li>Отдельно уточните, поддерживается ли нужный закупочный портал</li>
+</ul>
+
+<a class="link" href="https://kaspi.kz/business" target="_blank" rel="noopener">Официальный сайт →</a>
+</div>
+
+
+<div class="card">
+<b>🟢 Halyk Bank (Бизнес)</b>
+<span class="badge">Цифровые гарантии</span>
+
+<p class="mut">
+Проверено 16.11.2026 по опубликованной странице цифровой бланковой тендерной гарантии.
+</p>
+
+<ul>
+<li>Лимит: до 200 млн ₸; одна гарантия — до 100 млн ₸</li>
+<li>Тариф: до 5 млн ₸ — 2% (минимум 13 000 ₸); свыше 5 млн ₸ — 1,8%, с учётом НДС</li>
+<li>Для пакета «Тендер» действуют отдельные условия и бесплатные первые гарантии при соблюдении лимитов</li>
+</ul>
+
+<a class="link" href="https://halykbank.kz/business/garanty/tendernaya-garantiya" target="_blank" rel="noopener">Официальный тариф →</a>
+</div>
+
+
+<div class="card">
+<b>🔵 Банк ЦентрКредит (БЦК)</b>
+<span class="badge">Онлайн-гарантии</span>
+
+<p class="mut">
+Проверено 16.11.2026 по официальной странице BCC Business.
+</p>
+
+<ul>
+<li>Онлайн-бланковый лимит: до 350 млн ₸; для ИП до 50 млн ₸ и ТОО/АО до 100 млн ₸ без анализа оборотов в рамках указанных банком условий</li>
+<li>Комиссия за выпуск: 1,7% от суммы гарантии, минимум 10 000 ₸</li>
+<li>Срок выпуска зависит от способа обеспечения и продукта; банк указывает до 5–10 минут для ряда онлайн-гарантий</li>
+</ul>
+
+<a class="link" href="https://www.bcc.kz/business/loans/tender-guarantees/" target="_blank" rel="noopener">Официальный тариф →</a>
+</div>
+
+</div>
+</section>
+
+
+<section id="academy">
+
+<h2>Бесплатная академия поставщика</h2>
+
+<p class="mut">
+Информационные материалы и проверенные образовательные ресурсы для участников закупок
+</p>
+
+<div class="grid">
+
+<div class="card">
+<b>1. Основы государственных закупок</b>
+<p class="mut">Базовые принципы законодательства, правила участия и терминология.</p>
+</div>
+
+<div class="card">
+<b>2. Участие в закупках Самрук-Казына</b>
+<p class="mut">Правила холдинга и предварительный квалификационный отбор (ПКО).</p>
+</div>
+
+<div class="card">
+<b>3. Подготовка и подача заявок</b>
+<p class="mut">Защита от отклонений по формальным признакам и типичные ошибки.</p>
+</div>
+
+<div class="card">
+<b>4. Банковские гарантии</b>
+<p class="mut">Порядок оформления обеспечений и предотвращение кассовых разрывов.</p>
+</div>
+
+<div class="card">
+<b>5. Налоги и финансовая грамотность поставщика</b>
+<p class="mut">Особенности налогообложения поставщиков (НДС, СНР, КПН/ИПН).</p>
+</div>
+
+<div class="card">
+<b>6. Исполнение договора, логистика и управление контрактом</b>
+<p class="mut">Акты выполненных работ и логистические риски.</p>
+</div>
+
+</div>
+
+<p style="margin-top:12px">
+<b>Внешние ресурсы:</b>
+<a class="link" href="https://skills.enbek.kz/" target="_blank" rel="noopener">Skills Enbek</a> ·
+<a class="link" href="https://atameken.kz/" target="_blank" rel="noopener">НПП РК «Атамекен»</a> ·
+<a class="link" href="https://sk.kz/" target="_blank" rel="noopener">Самрук-Казына</a>
+</p>
+
+<div class="cat" id="catalog">
+
+<h3>Каталог образовательных программ</h3>
+
+<p class="mut">
+Сведения сверены с официальными страницами организаторов на дату проверки. Kzzakupbot Hub не связан партнёрством с перечисленными организациями. Стоимость и условия обучения уточняйте на официальном сайте организатора. Если параметр не показан, он не подтверждён на сайте.
+</p>
+
+<div class="flt">
+
+<div style="grid-column:1/-1">
+<label for="q">Поиск</label>
+<input id="q" type="search" placeholder="Название, организатор, тема">
+</div>
+
+<div>
+<label for="fc">Категория</label>
+<select id="fc">
+<option value="">Все</option>
+<option value="1">Государственные закупки и тендеры</option>
+<option value="2">Самрук-Қазына и недропользователи</option>
+<option value="3">Корпоративное право и договорная работа</option>
+<option value="4">Корпоративное управление и комплаенс</option>
+<option value="5">Бухгалтерия, налоги и МСФО</option>
+<option value="6">Финансовый менеджмент и инвестиции</option>
+<option value="7">Предпринимательство и управление бизнесом</option>
+</select>
+</div>
+
+<div>
+<label for="ft">Тип источника</label>
+<select id="ft">
+<option value="">Все</option>
+<option value="direct">Прямой организатор</option>
+<option value="agg">Агрегатор</option>
+<option value="unv">Данные не подтверждены</option>
+</select>
+</div>
+
+<div>
+<label for="ff">Формат</label>
+<select id="ff">
+<option value="">Все</option>
+<option value="online">Онлайн</option>
+<option value="offline">Офлайн</option>
+</select>
+</div>
+
+<div>
+<label for="fl">Язык</label>
+<select id="fl">
+<option value="">Все</option>
+<option value="ru">Русский</option>
+<option value="kk">Казахский</option>
+<option value="en">Английский</option>
+</select>
+</div>
+
+<div>
+<label for="fs">Набор</label>
+<select id="fs">
+<option value="">Все</option>
+<option value="open">Есть запись/заявка на странице</option>
+<option value="unk">Статус не подтверждён</option>
+</select>
+</div>
+
+<div>
+<label for="so">Сортировка</label>
+<select id="so">
+<option value="">По умолчанию</option>
+<option value="dur">По длительности</option>
+<option value="date">По дате проверки</option>
+</select>
+</div>
+
+</div>
+
+<p class="note" id="cnt"></p>
+
+<div class="grid pc-list" id="plist"></div>
+
+<p class="note" id="empty" hidden>
+Нет программ по выбранным фильтрам.
+</p>
+
+<p class="note">
+«Записаться» ведёт на страницу, где у организатора расположена форма или кнопка заявки; отдельных адресов регистрации там нет. Длительность в часах и днях/месяцах несопоставима: при сортировке программы без часов идут в конце.
+</p>
+
+<h3 style="margin-top:22px">Источники (20)</h3>
+
+<div id="srcs" class="grid"></div>
+
+</div>
+</section>
+
+
+<section id="fin">
+
+<h2>Фин. кабинет поставщика <span class="badge">MVP</span></h2>
+
+<p class="mut">
+Планирование оборотного капитала, кассового разрыва и стоимости финансирования тендерной сделки.
+</p>
+
+<form id="finDealForm">
+
+<div class="fin-panel">
+
+<h3>1. Параметры сделки</h3>
+
+<div class="fin-grid">
+
+<label>
+Цена контракта, ₸
+<input id="finContractAmount" type="number" min="1" step="1" value="6500000" required>
+</label>
+
+<label>
+Закупочная стоимость, ₸
+<input id="finPurchaseCost" type="number" min="0" step="1" value="5000000" required>
+</label>
+
+<label>
+Логистика, ₸
+<input id="finLogisticsCost" type="number" min="0" step="1" value="0">
+</label>
+
+<label>
+Прочие расходы, ₸
+<input id="finOtherCost" type="number" min="0" step="1" value="0">
+</label>
+
+<label>
+Собственные средства, ₸
+<input id="finOwnFunds" type="number" min="0" step="1" value="1000000">
+</label>
+
+<label>
+Начальный остаток на счёте, ₸
+<input id="finStartingBalance" type="number" step="1" value="0">
+</label>
+
+</div>
+</div>
+
+
+<div class="fin-panel">
+
+<h3>2. График поступлений и расходов</h3>
+
+<div class="fin-grid">
+
+<label>
+Аванс заказчика, %
+<input id="finAdvancePercent" type="number" min="0" max="100" step="0.1" value="0">
+</label>
+
+<label>
+День поступления аванса
+<input id="finAdvanceDay" type="number" min="0" step="1" value="0">
+</label>
+
+<label>
+День закупки
+<input id="finPurchaseDay" type="number" min="0" step="1" value="1">
+</label>
+
+<label>
+День оплаты логистики
+<input id="finLogisticsDay" type="number" min="0" step="1" value="1">
+</label>
+
+<label>
+День прочих расходов
+<input id="finOtherDay" type="number" min="0" step="1" value="1">
+</label>
+
+<label>
+День окончательной оплаты
+<input id="finPaymentDay" type="number" min="0" step="1" value="50">
+</label>
+
+</div>
+
+<p class="fin-hint">
+День 0 — дата начала сделки. Поступления и расходы одного дня суммируются; внутридневная очерёдность платежей пока не моделируется.
+</p>
+
+</div>
+
+
+<div class="fin-panel">
+
+<h3>3. Условия финансирования</h3>
+
+<div class="fin-grid">
+
+<label>
+Годовая ставка, %
+<input id="finAnnualRate" type="number" min="0" max="1000" step="0.01" value="20">
+</label>
+
+<label>
+Разовая комиссия от максимального долга, %
+<input id="finFeePercent" type="number" min="0" max="100" step="0.01" value="1">
+</label>
+
+</div>
+
+<p class="fin-hint">
+Ставка и комиссия — вводимые допущения, а не предложение конкретного банка.
+</p>
+
+</div>
+
+
+<div class="fin-actions">
+
+<button id="finCalculate" type="submit">
+Рассчитать сделку
+</button>
+
+<button id="finReset" type="button" class="fin-secondary">
+Сбросить
+</button>
+
+</div>
+
+<p id="finError" class="fin-error" role="alert"></p>
+
+</form>
+
+
+<div id="finResult" hidden>
+
+<div class="fin-panel">
+
+<h3>4. Результаты</h3>
+
+<div class="fin-kpis">
+
+<article>
+<span>Максимальный кассовый разрыв</span>
+<strong id="finKpiFunding">—</strong>
+</article>
+
+<article>
+<span>Пиковая потребность в долге</span>
+<strong id="finKpiDebt">—</strong>
+</article>
+
+<article>
+<span>Стоимость финансирования</span>
+<strong id="finKpiCost">—</strong>
+</article>
+
+<article>
+<span>Прибыль после финансирования</span>
+<strong id="finKpiProfit">—</strong>
+</article>
+
+</div>
+
+<div class="fin-details">
+
+<p>Операционная прибыль: <b id="finKpiOperating"></b></p>
+<p>Рентабельность: <b id="finKpiMargin"></b></p>
+<p>Проценты: <b id="finKpiInterest"></b></p>
+<p>Разовая комиссия: <b id="finKpiFee"></b></p>
+
+</div>
+</div>
+
+
+<div class="fin-panel">
+
+<h3>5. Календарь движения денег</h3>
+
+<div class="fin-table-wrap">
+
+<table>
+
+<thead>
+<tr>
+<th>День</th>
+<th>Операции</th>
+<th>Поступления</th>
+<th>Расходы</th>
+<th>Остаток*</th>
+<th>Дефицит</th>
+</tr>
+</thead>
+
+<tbody id="finSchedule"></tbody>
+
+</table>
+
+</div>
+
+<p class="fin-hint">
+* Остаток учитывает начальный остаток и собственные средства. Отрицательное значение — сумма, которую нужно профинансировать.
+</p>
+
+<p id="finAssumptions" class="fin-hint"></p>
+
+</div>
+</div>
+
+
+<p class="fin-disclaimer">
+Предварительная модель: не учитывает налоги, НДС, банковские гарантии, задержки приёмки, изменение цены и реальные ограничения кредитного продукта. Проценты начисляются по ежедневному остатку долга по простой годовой ставке / 365; разовая комиссия рассчитывается от пикового долга. Не является банковским предложением или бухгалтерским заключением.
+</p>
+
+</section>
+
+
+<p class="dis">
+Правовой дисклеймер: Kzzakupbot Hub является независимым информационно-аналитическим сервисом. Платформа не является государственным органом, финансовым учреждением или банком, не проводит государственные закупки и не гарантирует победу в тендерах или одобрение банковских гарантий.
+<br>
+© 2026 Kzzakupbot Hub. Все права защищены.
+</p>
+
 </main>
+
+
 <script src="{{ url_for('static', filename='js/financial-model.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/financial-cabinet.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/tender-live.js') }}" defer></script>
+
 </body>
 </html>
