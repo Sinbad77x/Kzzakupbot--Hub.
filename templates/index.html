@@ -35,36 +35,53 @@
 <label for="mk">Желаемая наценка, %</label><input id="mk" type="number" inputmode="decimal" value="25">
 <label for="tax">Налоговый режим</label>
 <select id="tax">
-<option value="snr">СНР (Упрощенка 3%)</option>
-<option value="vat">Общий (с НДС 12%)</option>
-<option value="novat">Без НДС / Общеустановленный</option>
+<option value="snr">СНР на основе упрощённой декларации</option>
+<option value="vat">ОУР — плательщик НДС</option>
+<option value="novat">ОУР — без НДС</option>
 </select>
-<label for="bid">Обеспечение заявки, %</label><input id="bid" type="number" inputmode="decimal" value="1">
-<label for="ctr">Обеспечение исполнения договора, %</label><input id="ctr" type="number" inputmode="decimal" value="3">
-<label for="fee">Комиссия банка за гарантию, %</label><input id="fee" type="number" inputmode="decimal" value="2">
+<div id="snrFields">
+<label for="snrRate">Ставка СНР, % (базовая — 4%; допустимый диапазон 2–6%)</label>
+<input id="snrRate" type="number" inputmode="decimal" min="2" max="6" step="0.1" value="4">
+</div>
+<div id="generalFields">
+<label for="legalForm">Организационная форма</label>
+<select id="legalForm"><option value="too">ТОО (базовый КПН 20%)</option><option value="ip">ИП (базовый ИПН 10% в пределах порога)</option></select>
+<label for="incomeRate">Расчётная ставка КПН / ИПН, % (можно изменить)</label>
+<input id="incomeRate" type="number" inputmode="decimal" min="0" max="100" step="0.1" value="20">
+</div>
+<div id="vatFields">
+<label for="vatRate">Ставка НДС, % (базовая — 16%)</label>
+<input id="vatRate" type="number" inputmode="decimal" min="0" max="100" step="0.1" value="16">
+<label for="inputVat">Входящий НДС к зачёту, ₸</label>
+<input id="inputVat" type="number" inputmode="decimal" min="0" value="0">
+</div>
+<label for="bid">Обеспечение заявки, %</label><input id="bid" type="number" inputmode="decimal" min="0" step="0.01" value="1">
+<label for="ctr">Обеспечение исполнения договора, %</label><input id="ctr" type="number" inputmode="decimal" min="0" step="0.01" value="3">
+<label for="fee">Комиссия банка за гарантию, %</label><input id="fee" type="number" inputmode="decimal" min="0" step="0.01" value="2">
+<label for="minFee">Минимальная комиссия банка, ₸ (если предусмотрена тарифом)</label><input id="minFee" type="number" inputmode="decimal" min="0" value="0">
 <button id="go" type="button">Рассчитать сделку</button>
 </div>
 <div class="card" id="res" aria-live="polite"></div>
 </div>
-<p class="mut" style="margin-top:8px;font-size:13px">Расчёт ориентировочный: ставки налогов упрощены, перед подачей заявки сверьтесь с актуальным Налоговым кодексом РК. Комиссия считается от суммы обеспечения.</p>
+<p class="mut" style="margin-top:8px;font-size:13px">Ориентировочная модель, не налоговая декларация. Для СНР налог рассчитывается с дохода (цены без НДС), а не с прибыли; базовая ставка — 4%, маслихат вправе установить ставку в диапазоне 2–6%. Не моделируется уменьшение объекта налогообложения на отдельные расходы на оплату труда при достижении предусмотренного Кодексом порога. При ОУР налог на прибыль/доход рассчитывается отдельно от НДС. Для режима с НДС цена предложения вводится без НДС; входящий НДС к зачёту укажите вручную. Себестоимость в модели считается без возмещаемого НДС. Расчёт КПН/ИПН — упрощённая оценка: для ИП на ОУР не моделируется прогрессивная шкала при превышении порога 230 000 МРП; не учитываются все налоговые корректировки, вычеты, социальные платежи и специальные ставки. Обеспечения показаны как суммы блокировки/гарантий, а не как расход. Минимальная комиссия применяется к сумме обеих гарантий одним значением; банк может рассчитывать комиссии отдельно по продуктам и срокам. Перед использованием проверьте применимость режима, региональную ставку и тарифы банка. Проверка нормативных ставок: 16.11.2026. <a class="link" href="https://www.gov.kz/org/kgd-vko/press/news/details/1288957?lang=ru" target="_blank" rel="noopener">КГД: СНР 4% и диапазон 2–6%</a> · <a class="link" href="https://www.gov.kz/org/kgd-abay/press/news/details/1115507?lang=ru" target="_blank" rel="noopener">КГД: НДС с 2026 года</a>.</p>
 </section>
 
 <section id="banks">
 <h2>Банки и гарантии</h2>
 <p class="mut">Оформление бланковых гарантий, открытие спецсчетов и расчетно-кассовое обслуживание</p>
 <div class="grid">
-<div class="card"><b>🟡 Kaspi Business</b><span class="badge">Онлайн 5 мин</span>
-<p class="mut">Экспресс-выпуск бланковых и обеспеченных гарантий в приложении Kaspi Pay.</p>
-<ul><li>Лимит: до 50 млн ₸ (ИП) / до 100 млн ₸ (ТОО)</li><li>Комиссия: от 1,5% до 3% (мин. 10 000 ₸)</li><li>Совместимость: Госзакупки РК, Самрук-Казына</li></ul>
-<a class="link" href="https://kaspi.kz/business" target="_blank" rel="noopener">Ссылка →</a></div>
-<div class="card"><b>🟢 Halyk Bank (Бизнес)</b><span class="badge">Крупные лимиты</span>
-<p class="mut">Цифровые тендерные гарантии Tender Pro в системе Halyk Onlinebank.</p>
-<ul><li>Бланковые гарантии: до 200 млн ₸ (до 100 млн ₸/лот)</li><li>Комиссия: 1–2% с НДС по пакетам Tender / Tender Pro</li><li>Дополнительно: валютные контракты, тендерные спецсчета 24/7</li></ul>
-<a class="link" href="https://halykbank.kz/" target="_blank" rel="noopener">Ссылка →</a></div>
-<div class="card"><b>🔵 Банк ЦентрКредит (БЦК)</b><span class="badge">Без залога</span>
-<p class="mut">Беззалоговые лимиты под обороты сторонних банков через BCC Business.</p>
-<ul><li>Лимит: беззалоговые гарантии до 350 млн ₸</li><li>Комиссия: от 1,7% (спецусловия при тендерной опции)</li><li>Скорость: решение и одобрение за 10 минут</li></ul>
-<a class="link" href="https://bcc.kz/" target="_blank" rel="noopener">Ссылка →</a></div>
+<div class="card"><b>🟡 Kaspi Business</b><span class="badge">Условия уточняются</span>
+<p class="mut">Проверено 16.11.2026. Сведения о конкретном тарифе, комиссии и лимите тендерной гарантии не подтверждены открытой тарифной страницей. Не используйте неподтверждённые цифры для расчёта сделки.</p>
+<ul><li>Проверяйте доступность продукта в Kaspi Pay / Kaspi Business</li><li>До оформления запросите тариф, минимальную комиссию и срок действия гарантии</li><li>Отдельно уточните, поддерживается ли нужный закупочный портал</li></ul>
+<a class="link" href="https://kaspi.kz/business" target="_blank" rel="noopener">Официальный сайт →</a></div>
+<div class="card"><b>🟢 Halyk Bank (Бизнес)</b><span class="badge">Цифровые гарантии</span>
+<p class="mut">Проверено 16.11.2026 по опубликованной странице цифровой бланковой тендерной гарантии.</p>
+<ul><li>Лимит: до 200 млн ₸; одна гарантия — до 100 млн ₸</li><li>Тариф: до 5 млн ₸ — 2% (минимум 13 000 ₸); свыше 5 млн ₸ — 1,8%, с учётом НДС</li><li>Для пакета «Тендер» действуют отдельные условия и бесплатные первые гарантии при соблюдении лимитов</li></ul>
+<a class="link" href="https://halykbank.kz/business/garanty/tendernaya-garantiya" target="_blank" rel="noopener">Официальный тариф →</a></div>
+<div class="card"><b>🔵 Банк ЦентрКредит (БЦК)</b><span class="badge">Онлайн-гарантии</span>
+<p class="mut">Проверено 16.11.2026 по официальной странице BCC Business.</p>
+<ul><li>Онлайн-бланковый лимит: до 350 млн ₸; для ИП до 50 млн ₸ и ТОО/АО до 100 млн ₸ без анализа оборотов в рамках указанных банком условий</li><li>Комиссия за выпуск: 1,7% от суммы гарантии, минимум 10 000 ₸</li><li>Срок выпуска зависит от способа обеспечения и продукта; банк указывает до 5–10 минут для ряда онлайн-гарантий</li></ul>
+<a class="link" href="https://www.bcc.kz/business/loans/tender-guarantees/" target="_blank" rel="noopener">Официальный тариф →</a></div>
 </div>
 </section>
 
