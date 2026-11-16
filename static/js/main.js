@@ -1,17 +1,64 @@
 (function(){
 var $=function(i){return document.getElementById(i)};
 var f=function(n){return Math.round(n).toLocaleString('ru-RU').replace(/\u00a0/g,' ')+' ₸'};
+function num(id){var v=Number($(id).value);return Number.isFinite(v)?v:0}
+function showMode(){
+var t=$('tax').value;
+$('snrFields').hidden=t!=='snr';
+$('generalFields').hidden=t==='snr';
+$('vatFields').hidden=t!=='vat';
+}
+function setLegalFormRate(){
+$('incomeRate').value=$('legalForm').value==='ip'?'10':'20';
+}
 function calc(){
-var cost=+$('cost').value||0,mk=+$('mk').value||0,bid=+$('bid').value||0,ctr=+$('ctr').value||0,fee=+$('fee').value||0,t=$('tax').value;
-var price=cost*(1+mk/100),gross=price-cost,tax,label;
-if(t==='snr'){tax=price*0.03;label='Сумма налога (СНР 3%)'}
-else if(t==='vat'){var vat=gross*0.12;tax=vat+(gross-vat)*0.20;label='Налоги (НДС 12% с наценки + КПН 20%)'}
-else{tax=gross*0.20;label='Налог (КПН 20% с прибыли)'}
-var gb=price*bid/100,gc=price*ctr/100,comm=(gb+gc)*fee/100,net=gross-tax-comm,margin=price?net/price*100:0;
-var rows=[['Цена предложения',f(price)],[label,f(tax)],['Валовая прибыль',f(gross)],['Чистая прибыль после налогов и комиссий',f(net),1],['Итоговая маржа',margin.toFixed(2)+'%',1],['Обеспечение заявки',f(gb)],['Обеспечение договора',f(gc)],['Комиссия банка за гарантии',f(comm)]];
+var cost=num('cost'),mk=num('mk'),bid=num('bid'),ctr=num('ctr'),fee=num('fee'),minFee=num('minFee');
+var t=$('tax').value,snrRate=num('snrRate'),incomeRate=num('incomeRate'),vatRate=num('vatRate'),inputVat=num('inputVat');
+var vals=[cost,mk,bid,ctr,fee,minFee,snrRate,incomeRate,vatRate,inputVat];
+if(vals.some(function(v){return v<0})||cost<=0||mk>10000||bid>100||ctr>100||fee>100||snrRate<2||snrRate>6||incomeRate>100||vatRate>100){
+$('res').innerHTML='<b>Проверьте введённые значения</b><p class="mut">Себестоимость должна быть больше нуля; ставки и проценты должны находиться в допустимых пределах. Для СНР ставка — от 2% до 6%.</p>';
+return;
+}
+var price=cost*(1+mk/100),gross=price-cost,incomeTax=0,outputVat=0,vatDue=0,taxLabel='',taxBase=price;
+if(t==='snr'){
+incomeTax=price*snrRate/100;
+taxLabel='ИПН / КПН по СНР ('+snrRate.toFixed(1)+'% с дохода)';
+}else{
+taxBase=gross;
+incomeTax=gross*incomeRate/100;
+taxLabel='Оценка '+(incomeRate.toFixed(1))+'% КПН / ИПН с расчётной прибыли';
+if(t==='vat'){
+outputVat=price*vatRate/100;
+vatDue=outputVat-inputVat;
+}
+}
+var contractAmount=price+outputVat;
+var gb=contractAmount*bid/100,gc=contractAmount*ctr/100,commissionByRate=(gb+gc)*fee/100,comm=(gb+gc)>0?Math.max(commissionByRate,minFee):0;
+var net=gross-incomeTax-comm,margin=price?net/price*100:0;
+var rows=[
+['Цена предложения без НДС',f(price)],
+['Валовая прибыль до налога',f(gross)],
+[taxLabel,f(incomeTax)],
+['Чистая прибыль после налога и расчётной комиссии',f(net),1],
+['Итоговая маржа от цены без НДС',margin.toFixed(2)+'%',1]
+];
+if(t==='vat'){
+rows.push(['Исходящий НДС ('+vatRate.toFixed(1)+'%)',f(outputVat)]);
+rows.push(['Входящий НДС к зачёту',f(inputVat)]);
+rows.push([vatDue>=0?'Расчётный НДС к уплате':'Превышение входящего НДС над исходящим',f(vatDue)]);
+rows.push(['Цена предложения с НДС',f(contractAmount)]);
+}
+rows.push(['База для расчёта обеспечений',f(contractAmount)]);
+rows.push(['Обеспечение заявки (сумма гарантии / блокировки)',f(gb)]);
+rows.push(['Обеспечение исполнения договора (сумма гарантии / блокировки)',f(gc)]);
+rows.push(['Расчётная комиссия банка (процент / минимум)',f(comm)]);
 $('res').innerHTML='<b>Результаты расчёта</b>'+rows.map(function(r){return '<div class="row'+(r[2]?' hl':'')+'"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>'}).join('');
 }
-$('go').addEventListener('click',calc);calc();
+$('tax').addEventListener('change',function(){showMode();calc()});
+$('legalForm').addEventListener('change',function(){setLegalFormRate();calc()});
+$('go').addEventListener('click',calc);
+['cost','mk','snrRate','incomeRate','vatRate','inputVat','bid','ctr','fee','minFee'].forEach(function(id){$(id).addEventListener('input',calc)});
+showMode();calc();
 })();
 
 (function(){
