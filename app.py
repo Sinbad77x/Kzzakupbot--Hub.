@@ -6,7 +6,7 @@ import logging
 import urllib.request
 import urllib.error
 
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from flask import Flask, render_template, jsonify
@@ -16,6 +16,8 @@ app = Flask(__name__)
 API_URL = "https://ows.goszakup.gov.kz/v3/graphql"
 LOCAL_TZ = ZoneInfo("Asia/Almaty")
 CACHE_SECONDS = 300
+
+logging.basicConfig(level=logging.INFO)
 
 _cache = {
     "expires": 0,
@@ -51,12 +53,12 @@ def fetch_tenders():
     query(
         $limit: Int,
         $after: Int,
-        $filter: TrdBuyFiltersInput!
+        $filter: TrdBuyFiltersInput
     ) {
-        trd_buy(
+        TrdBuy(
             limit: $limit,
             after: $after,
-            filters: $filter
+            filter: $filter
         ) {
             id
             numberAnno
@@ -68,8 +70,8 @@ def fetch_tenders():
             endDate
             refBuyStatusId
             orgBin
-            customerNameRu
             orgNameRu
+            customerNameRu
             systemId
         }
     }
@@ -79,7 +81,7 @@ def fetch_tenders():
         "operationName": None,
         "query": query,
         "variables": {
-            "limit": 50,
+            "limit": 100,
             "after": None,
             "filter": {
                 "refBuyStatusId": [210, 220]
@@ -97,14 +99,17 @@ def fetch_tenders():
         method="POST"
     )
 
-    with urllib.request.urlopen(request, timeout=20) as response:
-        result = json.loads(response.read().decode("utf-8"))
+    with urllib.request.urlopen(request, timeout=25) as response:
+        result = json.loads(
+            response.read().decode("utf-8")
+        )
 
     if result.get("errors"):
+        logging.error("GraphQL errors: %s", result["errors"])
         raise RuntimeError("GOSZAKUP_GRAPHQL_ERROR")
 
     raw_items = (
-        result.get("data", {}).get("trd_buy", [])
+        result.get("data", {}).get("TrdBuy") or []
     )
 
     now = datetime.now(LOCAL_TZ)
@@ -113,18 +118,12 @@ def fetch_tenders():
     for item in raw_items:
         end_date = parse_date(item.get("endDate"))
 
-        # Не показываем закупки с истёкшим сроком подачи заявок.
         if end_date and end_date <= now:
             continue
 
         tender_id = item.get("id")
 
         if not tender_id:
-            continue
-
-        try:
-            tender_id = int(tender_id)
-        except (ValueError, TypeError):
             continue
 
         name = (
@@ -150,14 +149,16 @@ def fetch_tenders():
             "status_id": item.get("refBuyStatusId"),
             "source": "Государственные закупки РК",
             "url": (
-                "https://www.goszakup.gov.kz/"
-                "ru/announce/index/" + str(tender_id)
+                "https://www.goszakup.gov.kz/ru/announce/index/"
+                + str(tender_id)
             )
         })
 
     tenders.sort(
-        key=lambda x: parse_date(x.get("published"))
-        or datetime.min.replace(tzinfo=LOCAL_TZ),
+        key=lambda item: (
+            parse_date(item.get("published"))
+            or datetime.min.replace(tzinfo=LOCAL_TZ)
+        ),
         reverse=True
     )
 
@@ -206,7 +207,7 @@ def api_tenders():
 
         return jsonify({
             "ok": False,
-            "message": "Временно не удалось получить данные портала."
+            "message": "Не удалось получить данные портала. Проверьте API-токен и журнал Render."
         }), 502
 
 
@@ -221,3 +222,4 @@ if __name__ == "__main__":
         port=5000,
         debug=False
     )
+    
