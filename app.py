@@ -361,7 +361,7 @@ def inspect_platform_assets():
 
 
 def inspect_platform_bootstrap():
-    """Return the public bootstrap JavaScript so its module-loading logic can be inspected."""
+    """Recursively inspect public JavaScript modules loaded by the platform bootstrap."""
     html_request = urllib.request.Request(
         PLATFORM_URL,
         headers={"User-Agent": "Mozilla/5.0 (compatible; KzzakupbotHub/1.0)", "Accept": "text/html"},
@@ -375,59 +375,79 @@ def inspect_platform_bootstrap():
 
     parser = PlatformHTMLParser()
     parser.feed(html)
-    script_urls = []
+    queue = []
     for src in parser.scripts:
         full_url = urljoin(PLATFORM_URL, src)
         parsed = urlparse(full_url)
-        if (
-            parsed.scheme == "https"
-            and parsed.hostname
-            and (parsed.hostname == PLATFORM_HOST or parsed.hostname.endswith("." + PLATFORM_HOST))
-        ):
-            script_urls.append(full_url)
+        if (parsed.scheme == "https" and parsed.hostname and
+                (parsed.hostname == PLATFORM_HOST or parsed.hostname.endswith("." + PLATFORM_HOST))):
+            queue.append(full_url)
 
-    if not script_urls:
+    if not queue:
         raise RuntimeError("NO_PUBLIC_BOOTSTRAP_SCRIPT_FOUND")
 
     inspected = []
-    for script_url in script_urls[:INSPECT_MAX_SCRIPTS]:
-        request = urllib.request.Request(
-            script_url,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; KzzakupbotHub/1.0)", "Accept": "*/*"},
-        )
-        with urllib.request.urlopen(
-            request, timeout=REQUEST_TIMEOUT, context=create_ssl_context()
-        ) as response:
-            raw = response.read(INSPECT_MAX_JS)
-            content_type = response.headers.get("Content-Type", "")
+    seen = set()
+    max_modules = 18
+    while queue and len(inspected) < max_modules:
+        script_url = queue.pop(0)
+        if script_url in seen:
+            continue
+        seen.add(script_url)
+        parsed = urlparse(script_url)
+        if (parsed.scheme != "https" or not parsed.hostname or
+                not (parsed.hostname == PLATFORM_HOST or parsed.hostname.endswith("." + PLATFORM_HOST))):
+            continue
+        try:
+            request = urllib.request.Request(
+                script_url,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; KzzakupbotHub/1.0)", "Accept": "*/*"},
+            )
+            with urllib.request.urlopen(
+                request, timeout=REQUEST_TIMEOUT, context=create_ssl_context()
+            ) as response:
+                raw = response.read(INSPECT_MAX_JS)
+                content_type = response.headers.get("Content-Type", "")
+            js_text = raw.decode("utf-8", errors="replace")
 
-        js_text = raw.decode("utf-8", errors="replace")
-        # Collect import() targets, module URLs, and URL-like string literals.
-        dynamic_imports = re.findall(
-            r"import\s*\(\s*[\"']([^\"']+)[\"']\s*\)", js_text
-        )
-        static_imports = re.findall(
-            r"(?:from\s*|import\s*)[\"']([^\"']+)[\"']", js_text
-        )
-        url_literals = re.findall(
-            r"[\"']((?:https?://|/)[^\"']{1,500})[\"']", js_text
-        )
-        inspected.append({
-            "url": script_url,
-            "content_type": content_type,
-            "bytes_read": len(raw),
-            "dynamic_imports": sorted(set(dynamic_imports))[:100],
-            "static_imports": sorted(set(static_imports))[:100],
-            "url_literals": sorted(set(url_literals))[:100],
-            "source_text": js_text[:20000],
-        })
+            dynamic_imports = re.findall(r"import\s*\(\s*[\"']([^\"']+)[\"']\s*\)", js_text)
+            static_imports = re.findall(r"(?:from\s*|import\s*)[\"']([^\"']+)[\"']", js_text)
+            import_targets = sorted(set(dynamic_imports + static_imports))
+            module_urls = []
+            for target in import_targets:
+                if target.startswith((".", "/", "https://")):
+                    target_url = urljoin(script_url, target)
+                    target_parsed = urlparse(target_url)
+                    if (target_parsed.scheme == "https" and target_parsed.hostname and
+                            (target_parsed.hostname == PLATFORM_HOST or target_parsed.hostname.endswith("." + PLATFORM_HOST)) and
+                            target_parsed.path.lower().endswith(".js")):
+                        module_urls.append(target_url)
+                        if target_url not in seen and target_url not in queue:
+                            queue.append(target_url)
+
+            url_literals = re.findall(r"[\"']((?:https?://|/)[^\"']{1,500})[\"']", js_text)
+            inspected.append({
+                "url": script_url,
+                "content_type": content_type,
+                "bytes_read": len(raw),
+                "dynamic_imports": sorted(set(dynamic_imports))[:100],
+                "static_imports": sorted(set(static_imports))[:100],
+                "discovered_module_urls": sorted(set(module_urls))[:100],
+                "url_literals": sorted(set(url_literals))[:150],
+                "source_text": js_text[:30000],
+            })
+        except Exception as error:
+            inspected.append({"url": script_url, "ok": False,
+                              "error": type(error).__name__ + ": " + str(error)})
 
     return {
         "ok": True,
         "checked_at": now_local(),
         "platform_url": PLATFORM_URL,
-        "scripts": inspected,
-        "note": "Публичный bootstrap-код. Это не означает, что обнаруженные адреса являются API объявлений."
+        "module_count": len(inspected),
+        "modules": inspected,
+        "pending_module_urls": queue[:100],
+        "note": "Проверяются публичные JS-модули и их импорты. Найденные URL ещё не подтверждены как API объявлений.",
     }
 
 @app.route("/")
@@ -508,4 +528,3 @@ def api_tenders():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
-        
