@@ -3,6 +3,8 @@ import json
 import time
 import logging
 import re
+import ssl
+import certifi
 import urllib.request
 import urllib.error
 
@@ -13,7 +15,6 @@ from zoneinfo import ZoneInfo
 
 from flask import Flask, render_template, jsonify
 
-
 app = Flask(__name__)
 
 SOURCE_URL = "https://procurement.gov.kz/ru/search/announce"
@@ -21,9 +22,16 @@ SOURCE_HOST = "procurement.gov.kz"
 
 LOCAL_TZ = ZoneInfo("Asia/Almaty")
 CACHE_SECONDS = 900
+REQUEST_TIMEOUT = 30
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+SSL_CONTEXT = ssl.create_default_context(
+    cafile=certifi.where()
+)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
 
 _cache = {
     "expires": 0,
@@ -35,9 +43,7 @@ def clean_text(value):
     if not value:
         return ""
 
-    value = value.replace("\xa0", " ")
     value = re.sub(r"\s+", " ", value)
-
     return value.strip()
 
 
@@ -48,20 +54,18 @@ def parse_date(value):
     value = clean_text(value)
 
     formats = [
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d %H:%M",
-        "%Y-%m-%d",
-        "%d.%m.%Y %H:%M:%S",
         "%d.%m.%Y %H:%M",
-        "%d.%m.%Y"
+        "%d.%m.%Y",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d"
     ]
 
-    for fmt in formats:
+    for date_format in formats:
         try:
-            result = datetime.strptime(value, fmt)
+            result = datetime.strptime(value, date_format)
             return result.replace(tzinfo=LOCAL_TZ)
         except ValueError:
-            pass
+            continue
 
     try:
         result = datetime.fromisoformat(
@@ -73,7 +77,7 @@ def parse_date(value):
 
         return result.astimezone(LOCAL_TZ)
 
-    except ValueError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -82,276 +86,240 @@ def parse_amount(value):
         return None
 
     value = clean_text(value)
+    value = value.replace("\xa0", "")
+    value = value.replace(" ", "")
+    value = value.replace(",", ".")
 
-    match = re.search(
-        r"-?\d[\d\s]*(?:[.,]\d{1,2})?",
-        value
-    )
+    match = re.search(r"\d+(?:\.\d+)?", value)
 
     if not match:
         return None
 
-    number = match.group(0)
-    number = re.sub(r"\s+", "", number)
-    number = number.replace(",", ".")
-
     try:
-        return float(number)
+        return float(match.group(0))
     except ValueError:
         return None
 
 
 class AnnouncementHTMLParser(HTMLParser):
-    """
-    Извлекает строки таблиц и ссылки из публичной HTML-страницы.
-    Не выполняет JavaScript и не использует авторизацию.
-    """
 
     def __init__(self):
-        super().__init__(convert_charrefs=True)
-
+        super().__init__()
         self.rows = []
         self.current_row = None
         self.current_cell = None
-        self.current_anchor = None
+        self.current_link = None
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
 
-        if tag == "tr" and self.current_row is None:
+        if tag == "tr":
             self.current_row = {
                 "cells": [],
                 "links": []
             }
 
         elif tag in ("td", "th") and self.current_row is not None:
-            if self.current_cell is None:
-                self.current_cell = {
-                    "text": "",
-                    "links": []
-                }
+            self.current_cell = {
+                "text": "",
+                "links": []
+            }
 
         elif tag == "a" and self.current_row is not None:
             href = attrs.get("href")
 
             if href:
-                link = {
-                    "href": href,
-                    "cell": self.current_cell
-                }
-
-                self.current_row["links"].append(link)
-
-                if self.current_cell is not None:
-                    self.current_cell["links"].append(link)
-
-        elif tag in ("br", "p", "div") and self.current_cell is not None:
-            self.current_cell["text"] += " "
+                self.current_link = href
 
     def handle_data(self, data):
         if self.current_cell is not None:
-            self.current_cell["text"] += data
+            self.current_cell["text"] += " " + data
+
+        if self.current_link is not None and self.current_row is not None:
+            self.current_row["links"].append(self.current_link)
 
     def handle_endtag(self, tag):
-        if tag in ("td", "th") and self.current_cell is not None:
-            self.current_row["cells"].append(
-                self.current_cell
-            )
-            self.current_cell = None
+        if tag == "a":
+            self.current_link = None
 
-        elif tag == "tr" and self.current_row is not None:
-            if self.current_cell is not None:
+        elif tag in ("td", "th"):
+            if self.current_cell is not None and self.current_row is not None:
+                self.current_cell["text"] = clean_text(
+                    self.current_cell["text"]
+                )
+
                 self.current_row["cells"].append(
                     self.current_cell
                 )
-                self.current_cell = None
 
-            if self.current_row["cells"]:
+            self.current_cell = None
+
+        elif tag == "tr":
+            if self.current_row is not None:
                 self.rows.append(self.current_row)
 
             self.current_row = None
 
 
-def extract_number(cells):
-    for cell in cells:
-        text = clean_text(cell.get("text", ""))
-
-        match = re.search(
-            r"\b\d{6,}-\d+\b",
-            text
-        )
-
-        if match:
-            return match.group(0)
-
-    return None
+def extract_number(value):
+    match = re.search(r"\b\d{6,}-\d+\b", value or "")
+    return match.group(0) if match else None
 
 
 def extract_source_link(row):
-    links = row.get("links", [])
+    for href in row.get("links", []):
+        full_url = urljoin(SOURCE_URL, href)
+        parsed = urlparse(full_url)
 
-    # Сначала проверяем ссылки из ячейки с наименованием.
-    cells = row.get("cells", [])
-
-    if len(cells) > 1:
-        candidates = cells[1].get("links", [])
-    else:
-        candidates = []
-
-    candidates = candidates + links
-
-    for item in candidates:
-        href = item.get("href")
-
-        if not href:
+        if parsed.scheme != "https":
             continue
 
-        absolute_url = urljoin(SOURCE_URL, href)
-        parsed = urlparse(absolute_url)
-
-        if parsed.scheme not in ("http", "https"):
+        if parsed.hostname not in (
+            "procurement.gov.kz",
+            "www.procurement.gov.kz"
+        ):
             continue
 
-        if parsed.netloc.lower() != SOURCE_HOST:
-            continue
-
-        if parsed.path == "/":
-            continue
-
-        return absolute_url
+        return full_url
 
     return None
 
 
-def parse_announcement_row(row, now):
+def parse_announcement_row(row):
     cells = row.get("cells", [])
 
     if len(cells) < 7:
         return None
 
-    number = extract_number(cells)
+    values = [
+        clean_text(cell.get("text", ""))
+        for cell in cells
+    ]
+
+    combined = " ".join(values)
+
+    number = extract_number(combined)
 
     if not number:
         return None
 
-    name_cell = clean_text(cells[1].get("text", ""))
+    name_text = values[1]
 
-    organizer = "Не указан"
+    organizer = "Организатор не указан"
 
     organizer_match = re.search(
-        r"Организатор\s*:\s*(.*)",
-        name_cell,
-        flags=re.IGNORECASE
+        r"Организатор\s*:\s*(.+)",
+        name_text,
+        re.IGNORECASE
     )
 
     if organizer_match:
-        organizer = clean_text(
-            organizer_match.group(1)
+        organizer = clean_text(organizer_match.group(1))
+        name_text = clean_text(
+            name_text[:organizer_match.start()]
         )
 
-        name = clean_text(
-            name_cell[:organizer_match.start()]
-        )
-    else:
-        name = name_cell
+    start_date = parse_date(values[3])
+    end_date = parse_date(values[4])
 
-    method = clean_text(cells[2].get("text", ""))
-    start_text = clean_text(cells[3].get("text", ""))
-    end_text = clean_text(cells[4].get("text", ""))
-    amount_text = clean_text(cells[5].get("text", ""))
-    status = clean_text(cells[6].get("text", ""))
-
-    start_date = parse_date(start_text)
-    end_date = parse_date(end_text)
-
-    # Если срок не удалось распознать, не выдаём запись
-    # за действующую закупку.
     if not end_date:
         return None
 
-    # Не показываем объявления с истёкшим сроком подачи.
-    if end_date <= now:
-        return None
+    amount = parse_amount(values[5])
 
-    if not name:
-        name = "Название не указано"
+    link = extract_source_link(row)
 
     return {
         "id": number,
         "number": number,
-        "name": name,
-        "method": method or "Не указан",
-        "organizer": organizer,
-        "amount": parse_amount(amount_text),
+        "name": name_text or "Название не указано",
+        "amount": amount,
         "published": None,
-        "start_date": start_text or None,
-        "end_date": end_text or None,
-        "status": status or "Не указан",
-        "url": extract_source_link(row),
-        "source": "Единая платформа государственных закупок РК"
+        "start_date": (
+            start_date.isoformat() if start_date else None
+        ),
+        "end_date": end_date.isoformat(),
+        "organizer": organizer,
+        "method": values[2] or "Не указан",
+        "status": values[6] or "Не указан",
+        "source": "Государственные закупки РК",
+        "url": link
     }
 
 
 def fetch_public_tenders():
+
     request = urllib.request.Request(
         SOURCE_URL,
         headers={
             "User-Agent": (
-                "Mozilla/5.0 (compatible; "
-                "KzzakupbotHub/1.0)"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 Chrome/120.0 Safari/537.36"
             ),
             "Accept": (
                 "text/html,application/xhtml+xml,"
                 "application/xml;q=0.9,*/*;q=0.8"
             ),
-            "Accept-Language": "ru-RU,ru;q=0.9,kk;q=0.8"
+            "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8"
         },
         method="GET"
     )
 
+    logging.info(
+        "Запрос публичной страницы закупок: %s",
+        SOURCE_URL
+    )
+
     with urllib.request.urlopen(
         request,
-        timeout=30
+        timeout=REQUEST_TIMEOUT,
+        context=SSL_CONTEXT
     ) as response:
 
-        status_code = response.getcode()
-
-        if status_code != 200:
-            raise RuntimeError(
-                "PUBLIC_PORTAL_HTTP_ERROR"
-            )
-
-        raw_html = response.read()
-
-        charset = response.headers.get_content_charset()
-
-        if not charset:
-            charset = "utf-8"
-
-        html = raw_html.decode(
-            charset,
+        status_code = response.status
+        final_url = response.geturl()
+        html = response.read().decode(
+            "utf-8",
             errors="replace"
         )
+
+    logging.info(
+        "Ответ портала: HTTP %s, URL: %s, размер: %s",
+        status_code,
+        final_url,
+        len(html)
+    )
 
     parser = AnnouncementHTMLParser()
     parser.feed(html)
 
-    if not parser.rows:
-        raise RuntimeError(
-            "PUBLIC_PORTAL_TABLE_NOT_FOUND"
-        )
+    logging.info(
+        "Найдено HTML-строк: %s",
+        len(parser.rows)
+    )
 
     now = datetime.now(LOCAL_TZ)
     tenders = []
 
     for row in parser.rows:
-        item = parse_announcement_row(row, now)
+        try:
+            item = parse_announcement_row(row)
 
-        if item:
+            if not item:
+                continue
+
+            end_date = parse_date(item["end_date"])
+
+            if not end_date or end_date <= now:
+                continue
+
             tenders.append(item)
 
-    # Сортировка по сроку окончания:
-    # ближайшие дедлайны идут первыми.
+        except Exception:
+            logging.exception(
+                "Ошибка обработки строки объявления"
+            )
+
     tenders.sort(
         key=lambda item: (
             parse_date(item["end_date"])
@@ -359,18 +327,22 @@ def fetch_public_tenders():
         )
     )
 
+    logging.info(
+        "Количество действующих объявлений: %s",
+        len(tenders)
+    )
+
+    if not parser.rows:
+        raise RuntimeError(
+            "PORTAL_HTML_HAS_NO_TABLE_ROWS"
+        )
+
     return {
         "ok": True,
-        "configured": True,
         "items": tenders[:30],
-        "count": len(tenders[:30]),
         "updated_at": datetime.now(LOCAL_TZ).isoformat(),
         "source": SOURCE_URL,
-        "source_name": (
-            "Официальная Единая платформа "
-            "государственных закупок РК"
-        ),
-        "cache_seconds": CACHE_SECONDS
+        "count": len(tenders)
     }
 
 
@@ -381,12 +353,10 @@ def index():
 
 @app.route("/api/tenders")
 def api_tenders():
+
     now = time.time()
 
-    if (
-        _cache["data"] is not None
-        and now < _cache["expires"]
-    ):
+    if _cache["data"] and now < _cache["expires"]:
         return jsonify(_cache["data"])
 
     try:
@@ -398,48 +368,44 @@ def api_tenders():
         return jsonify(data)
 
     except urllib.error.HTTPError as error:
-        logger.exception(
-            "Публичный портал вернул HTTP-ошибку"
+        logging.exception(
+            "HTTP-ошибка портала закупок: %s",
+            error.code
         )
 
-        message = (
-            "Публичный портал временно отклонил запрос."
+        return jsonify({
+            "ok": False,
+            "message": "Портал вернул HTTP-ошибку.",
+            "error_type": "HTTPError",
+            "error_code": error.code,
+            "source": SOURCE_URL
+        }), 502
+
+    except urllib.error.URLError as error:
+        logging.exception(
+            "Ошибка подключения к порталу закупок"
         )
 
-    except urllib.error.URLError:
-        logger.exception(
-            "Не удалось подключиться к публичному порталу"
+        return jsonify({
+            "ok": False,
+            "message": "Не удалось подключиться к порталу закупок.",
+            "error_type": "URLError",
+            "details": str(error.reason),
+            "source": SOURCE_URL
+        }), 502
+
+    except Exception as error:
+        logging.exception(
+            "Ошибка загрузки государственных закупок"
         )
 
-        message = (
-            "Не удалось подключиться к порталу закупок."
-        )
-
-    except Exception:
-        logger.exception(
-            "Ошибка загрузки публичных объявлений"
-        )
-
-        message = (
-            "Не удалось обработать таблицу объявлений. "
-            "Возможно, портал изменил структуру страницы."
-        )
-
-    # Если свежая загрузка не удалась, можно показать
-    # предыдущий кэш, явно обозначив его как устаревший.
-    if _cache["data"] is not None:
-        stale_data = dict(_cache["data"])
-        stale_data["stale"] = True
-        stale_data["warning"] = message
-
-        return jsonify(stale_data)
-
-    return jsonify({
-        "ok": False,
-        "configured": True,
-        "message": message,
-        "source": SOURCE_URL
-    }), 502
+        return jsonify({
+            "ok": False,
+            "message": "Не удалось загрузить объявления.",
+            "error_type": type(error).__name__,
+            "details": str(error),
+            "source": SOURCE_URL
+        }), 502
 
 
 @app.route("/healthz")
