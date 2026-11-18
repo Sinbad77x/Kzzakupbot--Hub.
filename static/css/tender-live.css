@@ -1,5 +1,4 @@
 
-
 #tender-live {
     margin: 18px auto 24px;
     padding: 18px;
@@ -69,6 +68,7 @@
     margin: 0 0 14px;
     color: #a5b4fc;
     font-size: 13px;
+    line-height: 1.5;
 }
 
 .tender-live-grid {
