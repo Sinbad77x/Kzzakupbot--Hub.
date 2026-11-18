@@ -12,7 +12,9 @@
     }
 
     const API_URL = "/api/tenders";
-    const REFRESH_INTERVAL = 5 * 60 * 1000;
+    const REFRESH_INTERVAL = 15 * 60 * 1000;
+
+    let loading = false;
 
     function formatMoney(value) {
         const number = Number(value);
@@ -63,7 +65,12 @@
     function createDetail(label, value) {
         const line = createElement("div", "tender-detail");
 
-        const title = createElement("strong", "", label + ": ");
+        const title = createElement(
+            "strong",
+            "",
+            label + ": "
+        );
+
         const content = document.createTextNode(
             value || "Не указано"
         );
@@ -111,7 +118,7 @@
         );
 
         details.appendChild(
-            createDetail("Опубликовано", formatDate(item.published))
+            createDetail("Способ закупки", item.method)
         );
 
         details.appendChild(
@@ -122,13 +129,17 @@
             createDetail("Окончание приёма", formatDate(item.end_date))
         );
 
+        details.appendChild(
+            createDetail("Статус", item.status)
+        );
+
         card.appendChild(details);
 
         if (item.url) {
             const link = createElement(
                 "a",
                 "tender-card-link",
-                "Открыть объявление на goszakup.gov.kz"
+                "Открыть объявление на портале"
             );
 
             link.href = item.url;
@@ -149,9 +160,10 @@
                 createElement(
                     "div",
                     "tender-live-empty",
-                    "Сейчас нет объявлений, подходящих под выбранные фильтры API."
+                    "На загруженной странице не найдено объявлений с действующим сроком подачи заявок."
                 )
             );
+
             return;
         }
 
@@ -165,8 +177,15 @@
     }
 
     async function loadTenders() {
+        if (loading) {
+            return;
+        }
+
+        loading = true;
         refreshButton.disabled = true;
-        status.textContent = "Загружаем данные официального портала...";
+
+        status.textContent =
+            "Загружаем объявления с официального портала...";
 
         try {
             const response = await fetch(API_URL, {
@@ -181,7 +200,7 @@
 
             if (!response.ok || !data.ok) {
                 throw new Error(
-                    data.message || "Ошибка загрузки закупок."
+                    data.message || "Ошибка загрузки объявлений."
                 );
             }
 
@@ -189,10 +208,13 @@
 
             if (data.stale) {
                 status.textContent =
-                    "Показаны ранее загруженные данные: портал временно недоступен.";
+                    "Показаны ранее загруженные данные. " +
+                    (data.warning || "Портал временно недоступен.");
             } else {
                 status.textContent =
-                    "Источник: официальный портал государственных закупок РК.";
+                    "Источник: официальная Единая платформа " +
+                    "государственных закупок РК. " +
+                    "Найдено объявлений: " + (data.count || 0) + ".";
             }
 
             if (updatedLabel) {
@@ -205,22 +227,32 @@
 
             status.textContent = error.message;
 
-            if (!container.children.length) {
-                container.appendChild(
-                    createElement(
-                        "div",
-                        "tender-live-empty",
-                        "Не удалось загрузить объявления. Проверьте API-токен в Render и журнал приложения."
-                    )
-                );
+            container.replaceChildren();
+
+            container.appendChild(
+                createElement(
+                    "div",
+                    "tender-live-empty",
+                    "Не удалось загрузить данные. " +
+                    "Проверьте журнал Render. " +
+                    "Демонстрационные объявления не используются."
+                )
+            );
+
+            if (updatedLabel) {
+                updatedLabel.textContent = "";
             }
 
         } finally {
+            loading = false;
             refreshButton.disabled = false;
         }
     }
 
-    refreshButton.addEventListener("click", loadTenders);
+    refreshButton.addEventListener(
+        "click",
+        loadTenders
+    );
 
     loadTenders();
 
@@ -229,4 +261,3 @@
         REFRESH_INTERVAL
     );
 })();
-
