@@ -359,6 +359,77 @@ def inspect_platform_assets():
     }
 
 
+
+def inspect_platform_bootstrap():
+    """Return the public bootstrap JavaScript so its module-loading logic can be inspected."""
+    html_request = urllib.request.Request(
+        PLATFORM_URL,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; KzzakupbotHub/1.0)", "Accept": "text/html"},
+    )
+    with urllib.request.urlopen(
+        html_request, timeout=REQUEST_TIMEOUT, context=create_ssl_context()
+    ) as response:
+        html = response.read(INSPECT_MAX_HTML).decode(
+            response.headers.get_content_charset() or "utf-8", errors="replace"
+        )
+
+    parser = PlatformHTMLParser()
+    parser.feed(html)
+    script_urls = []
+    for src in parser.scripts:
+        full_url = urljoin(PLATFORM_URL, src)
+        parsed = urlparse(full_url)
+        if (
+            parsed.scheme == "https"
+            and parsed.hostname
+            and (parsed.hostname == PLATFORM_HOST or parsed.hostname.endswith("." + PLATFORM_HOST))
+        ):
+            script_urls.append(full_url)
+
+    if not script_urls:
+        raise RuntimeError("NO_PUBLIC_BOOTSTRAP_SCRIPT_FOUND")
+
+    inspected = []
+    for script_url in script_urls[:INSPECT_MAX_SCRIPTS]:
+        request = urllib.request.Request(
+            script_url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; KzzakupbotHub/1.0)", "Accept": "*/*"},
+        )
+        with urllib.request.urlopen(
+            request, timeout=REQUEST_TIMEOUT, context=create_ssl_context()
+        ) as response:
+            raw = response.read(INSPECT_MAX_JS)
+            content_type = response.headers.get("Content-Type", "")
+
+        js_text = raw.decode("utf-8", errors="replace")
+        # Collect import() targets, module URLs, and URL-like string literals.
+        dynamic_imports = re.findall(
+            r"import\s*\(\s*[\"']([^\"']+)[\"']\s*\)", js_text
+        )
+        static_imports = re.findall(
+            r"(?:from\s*|import\s*)[\"']([^\"']+)[\"']", js_text
+        )
+        url_literals = re.findall(
+            r"[\"']((?:https?://|/)[^\"']{1,500})[\"']", js_text
+        )
+        inspected.append({
+            "url": script_url,
+            "content_type": content_type,
+            "bytes_read": len(raw),
+            "dynamic_imports": sorted(set(dynamic_imports))[:100],
+            "static_imports": sorted(set(static_imports))[:100],
+            "url_literals": sorted(set(url_literals))[:100],
+            "source_text": js_text[:20000],
+        })
+
+    return {
+        "ok": True,
+        "checked_at": now_local(),
+        "platform_url": PLATFORM_URL,
+        "scripts": inspected,
+        "note": "Публичный bootstrap-код. Это не означает, что обнаруженные адреса являются API объявлений."
+    }
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -395,6 +466,21 @@ def platform_inspect():
         }), 502
 
 
+
+@app.route("/api/platform-bootstrap")
+def platform_bootstrap():
+    try:
+        logger.info("Reading public bootstrap JavaScript of unified procurement platform")
+        return jsonify(inspect_platform_bootstrap())
+    except Exception as error:
+        logger.exception("Platform bootstrap inspection failed")
+        return jsonify({
+            "ok": False,
+            "url": PLATFORM_URL,
+            "error": type(error).__name__ + ": " + str(error),
+            "checked_at": now_local(),
+        }), 502
+
 @app.route("/api/tenders")
 def api_tenders():
     current_time = time.time()
@@ -422,4 +508,4 @@ def api_tenders():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
-                
+        
