@@ -4,7 +4,7 @@ import time
 import logging
 import re
 import ssl
-import os
+import socket
 import urllib.request
 import urllib.error
 import certifi
@@ -17,25 +17,23 @@ from zoneinfo import ZoneInfo
 from flask import Flask, render_template, jsonify
 
 
-# =========================================================
-# APPLICATION
-# =========================================================
-
 app = Flask(__name__)
 
 SOURCE_URL = "https://procurement.gov.kz/ru/search/announce"
 SOURCE_HOST = "procurement.gov.kz"
 
+PLATFORM_URL = "https://zakup.gov.kz/cabinet/"
+PLATFORM_HOST = "zakup.gov.kz"
+
 LOCAL_TZ = ZoneInfo("Asia/Almaty")
 
 CACHE_SECONDS = 900
-REQUEST_TIMEOUT = 30
+REQUEST_TIMEOUT = 8
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s"
 )
-
 logger = logging.getLogger(__name__)
 
 _cache = {
@@ -44,137 +42,37 @@ _cache = {
 }
 
 
-# =========================================================
-# SSL CONFIGURATION AND DIAGNOSTICS
-# =========================================================
-
-def log_ssl_configuration():
-    """Записывает сведения о сертификатах в Render."""
-
-    logger.info("========== SSL DIAGNOSTICS ==========")
-
-    try:
-        logger.info("Python SSL version: %s", ssl.OPENSSL_VERSION)
-    except Exception:
-        logger.exception("Cannot read OpenSSL version")
-
-    try:
-        logger.info("Certifi version: %s", certifi.__version__)
-        logger.info("Certifi CA file: %s", certifi.where())
-        logger.info(
-            "Certifi CA file exists: %s",
-            os.path.isfile(certifi.where())
-        )
-    except Exception:
-        logger.exception("Certifi diagnostics failed")
-
-    try:
-        logger.info(
-            "System default verify paths: %s",
-            ssl.get_default_verify_paths()
-        )
-    except Exception:
-        logger.exception("Cannot read system SSL paths")
-
-    logger.info("=====================================")
+def now_local():
+    return datetime.now(LOCAL_TZ).isoformat()
 
 
-def create_ssl_contexts():
-    """
-    Создаёт два безопасных SSL-контекста:
-    1. На основе certifi.
-    2. На основе системного хранилища Python.
+def create_ssl_context():
+    return ssl.create_default_context(cafile=certifi.where())
 
-    Проверка сертификатов остаётся включённой.
-    """
-
-    contexts = []
-
-    try:
-        certifi_context = ssl.create_default_context(
-            cafile=certifi.where()
-        )
-
-        contexts.append(
-            ("certifi", certifi_context)
-        )
-
-        logger.info("Created SSL context using certifi")
-
-    except Exception:
-        logger.exception("Could not create certifi SSL context")
-
-    try:
-        system_context = ssl.create_default_context()
-
-        contexts.append(
-            ("system", system_context)
-        )
-
-        logger.info("Created system SSL context")
-
-    except Exception:
-        logger.exception("Could not create system SSL context")
-
-    if not contexts:
-        raise RuntimeError("SSL_CONTEXT_CREATION_FAILED")
-
-    return contexts
-
-
-# =========================================================
-# TEXT AND DATE HELPERS
-# =========================================================
 
 def clean_text(value):
-    if value is None:
+    if not value:
         return ""
-
-    value = re.sub(r"<[^>]+>", " ", str(value))
-    value = value.replace("\xa0", " ")
-
     return re.sub(r"\s+", " ", value).strip()
 
 
 def parse_date(value):
-    if not value:
-        return None
-
     value = clean_text(value)
 
     formats = [
         "%d.%m.%Y %H:%M",
-        "%d.%m.%Y %H:%M:%S",
         "%d.%m.%Y",
         "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d %H:%M",
-        "%Y-%m-%d",
+        "%Y-%m-%d"
     ]
 
     for fmt in formats:
         try:
-            result = datetime.strptime(value, fmt)
-
-            if result.tzinfo is None:
-                result = result.replace(tzinfo=LOCAL_TZ)
-
-            return result.astimezone(LOCAL_TZ)
-
+            return datetime.strptime(value, fmt).isoformat()
         except ValueError:
-            continue
+            pass
 
-    try:
-        result = datetime.fromisoformat(
-            value.replace("Z", "+00:00")
-        )
-
-        if result.tzinfo is None:
-            result = result.replace(tzinfo=LOCAL_TZ)
-
-        return result.astimezone(LOCAL_TZ)
-
-    except (ValueError, TypeError):
-        return None
+    return None
 
 
 def parse_amount(value):
@@ -182,494 +80,410 @@ def parse_amount(value):
         return None
 
     value = clean_text(value)
-
-    value = (
-        value.replace("₸", "")
-        .replace("тг.", "")
-        .replace("тг", "")
-        .replace(" ", "")
-        .replace("\u202f", "")
-    )
-
+    value = value.replace("\xa0", "").replace(" ", "")
     value = value.replace(",", ".")
 
+    match = re.search(r"\d+(?:\.\d+)?", value)
+
+    if not match:
+        return None
+
     try:
-        number = float(value)
-
-        if number.is_integer():
-            return int(number)
-
-        return number
-
-    except (ValueError, TypeError):
+        return float(match.group())
+    except ValueError:
         return None
 
 
-# =========================================================
-# HTML TABLE PARSER
-# =========================================================
-
-class AnnouncementHTMLParser(HTMLParser):
-
-    def __init__(self):
-        super().__init__()
-
-        self.rows = []
-        self.current_row = None
-        self.current_cell = None
-        self.current_link = None
-
-    def handle_starttag(self, tag, attrs):
-
-        attrs = dict(attrs)
-
-        if tag == "tr":
-            self.current_row = []
-
-        elif tag in ("td", "th") and self.current_row is not None:
-            self.current_cell = {
-                "text": "",
-                "links": []
-            }
-
-        elif tag == "a" and self.current_cell is not None:
-            self.current_link = {
-                "href": attrs.get("href", ""),
-                "text": ""
-            }
-
-    def handle_data(self, data):
-
-        if self.current_cell is not None:
-            self.current_cell["text"] += data
-
-        if self.current_link is not None:
-            self.current_link["text"] += data
-
-    def handle_endtag(self, tag):
-
-        if tag == "a" and self.current_link is not None:
-
-            if self.current_cell is not None:
-                self.current_cell["links"].append(
-                    self.current_link
-                )
-
-            self.current_link = None
-
-        elif tag in ("td", "th"):
-
-            if (
-                self.current_cell is not None
-                and self.current_row is not None
-            ):
-                self.current_cell["text"] = clean_text(
-                    self.current_cell["text"]
-                )
-
-                self.current_row.append(
-                    self.current_cell
-                )
-
-            self.current_cell = None
-
-        elif tag == "tr":
-
-            if self.current_row:
-                self.rows.append(self.current_row)
-
-            self.current_row = None
-            self.current_cell = None
-            self.current_link = None
-
-
-# =========================================================
-# ANNOUNCEMENT PARSING
-# =========================================================
-
-def extract_number(text):
-
-    match = re.search(
-        r"\b\d{6,}-\d+\b",
-        text or ""
-    )
-
-    if match:
-        return match.group(0)
-
-    return None
-
-
-def extract_source_link(cells):
-
-    for cell in cells:
-
-        for link in cell.get("links", []):
-
-            href = link.get("href", "").strip()
-
-            if not href:
-                continue
-
-            absolute_url = urljoin(
-                SOURCE_URL,
-                href
-            )
-
-            parsed = urlparse(absolute_url)
-
-            if (
-                parsed.scheme == "https"
-                and parsed.hostname
-                and (
-                    parsed.hostname == SOURCE_HOST
-                    or parsed.hostname.endswith("." + SOURCE_HOST)
-                )
-            ):
-                return absolute_url
-
-    return None
-
-
-def parse_announcement_row(row):
-
-    if len(row) < 7:
-        return None
-
-    values = [
-        clean_text(cell.get("text", ""))
-        for cell in row
-    ]
-
-    combined_text = " ".join(values)
-
-    number = extract_number(combined_text)
-
-    if not number:
-        return None
-
-    name = values[1] if len(values) > 1 else ""
-
-    organizer = "Организатор не указан"
-
-    organizer_match = re.search(
-        r"Организатор\s*:\s*(.+)",
-        name,
-        flags=re.IGNORECASE
-    )
-
-    if organizer_match:
-        organizer = organizer_match.group(1).strip()
-
-        name = re.sub(
-            r"Организатор\s*:\s*.+$",
-            "",
-            name,
-            flags=re.IGNORECASE
-        ).strip()
-
-    if not name:
-        name = "Название не указано"
-
-    method = values[2] if len(values) > 2 else ""
-
-    start_date = values[3] if len(values) > 3 else ""
-
-    end_date = values[4] if len(values) > 4 else ""
-
-    amount = values[5] if len(values) > 5 else ""
-
-    status = values[6] if len(values) > 6 else ""
-
-    parsed_end_date = parse_date(end_date)
-
-    if not parsed_end_date:
-        return None
-
-    source_link = extract_source_link(row)
-
-    return {
-        "id": number,
-        "number": number,
-        "name": name,
-        "amount": parse_amount(amount),
-        "amount_text": amount,
-        "organizer": organizer,
-        "method": method or "Не указан",
-        "published": None,
-        "start_date": start_date,
-        "end_date": end_date,
-        "status": status or "Не указан",
-        "source": "Государственные закупки РК",
-        "url": source_link
+def check_source(url, expected_host):
+    result = {
+        "url": url,
+        "host": expected_host,
+        "ok": False,
+        "dns_ok": False,
+        "https_ok": False,
+        "http_status": None,
+        "response_time_ms": None,
+        "resolved_addresses": [],
+        "error": None
     }
 
+    started = time.monotonic()
 
-# =========================================================
-# PORTAL CONNECTION
-# =========================================================
+    try:
+        addresses = socket.getaddrinfo(
+            expected_host,
+            443,
+            type=socket.SOCK_STREAM
+        )
 
-def download_portal_page():
+        result["dns_ok"] = True
+        result["resolved_addresses"] = sorted(
+            list(set(item[4][0] for item in addresses))
+        )
 
-    log_ssl_configuration()
+    except Exception as error:
+        result["error"] = "DNS_ERROR: " + str(error)
+        result["response_time_ms"] = round(
+            (time.monotonic() - started) * 1000
+        )
+        return result
 
-    request = urllib.request.Request(
-        SOURCE_URL,
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept": (
-                "text/html,application/xhtml+xml,"
-                "application/xml;q=0.9,*/*;q=0.8"
-            ),
-            "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
-            "Connection": "close"
-        },
-        method="GET"
-    )
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 "
+                    "(Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 "
+                    "Chrome/120.0 Safari/537.36"
+                ),
+                "Accept": (
+                    "text/html,application/xhtml+xml,"
+                    "application/json;q=0.9,*/*;q=0.8"
+                ),
+                "Accept-Language": "ru,en;q=0.8"
+            }
+        )
 
-    last_error = None
-
-    contexts = create_ssl_contexts()
-
-    for context_name, context in contexts:
+        context = create_ssl_context()
 
         try:
-
-            logger.info(
-                "Trying portal connection using SSL context: %s",
-                context_name
-            )
-
-            with urllib.request.urlopen(
+            response = urllib.request.urlopen(
                 request,
                 timeout=REQUEST_TIMEOUT,
                 context=context
-            ) as response:
+            )
 
-                status_code = response.status
+            result["http_status"] = response.status
+            response.read(1024)
+            response.close()
 
-                if status_code != 200:
-                    raise RuntimeError(
-                        "PORTAL_HTTP_STATUS_" + str(status_code)
-                    )
+            result["https_ok"] = True
+            result["ok"] = 200 <= result["http_status"] < 400
 
-                raw_data = response.read()
-
-                encoding = response.headers.get_content_charset()
-
-                if not encoding:
-                    encoding = "utf-8"
-
-                html = raw_data.decode(
-                    encoding,
-                    errors="replace"
-                )
-
-                logger.info(
-                    "Portal connection successful using %s. "
-                    "HTTP status: %s. Response size: %s bytes",
-                    context_name,
-                    status_code,
-                    len(raw_data)
-                )
-
-                return html
+        except urllib.error.HTTPError as error:
+            result["http_status"] = error.code
+            result["https_ok"] = True
+            result["ok"] = 200 <= error.code < 400
+            result["error"] = "HTTP_ERROR: " + str(error.code)
 
         except Exception as error:
+            result["error"] = type(error).__name__ + ": " + str(error)
 
-            last_error = error
+    except Exception as error:
+        result["error"] = str(error)
 
-            logger.exception(
-                "Portal connection failed using SSL context: %s",
-                context_name
-            )
-
-    logger.error(
-        "All secure SSL connection attempts failed. Last error: %s",
-        str(last_error)
-    )
-
-    raise RuntimeError(
-        "SSL_CONNECTION_FAILED: " + str(last_error)
-    )
-
-
-# =========================================================
-# FETCH PUBLIC TENDERS
-# =========================================================
-
-def fetch_public_tenders():
-
-    html = download_portal_page()
-
-    parser = AnnouncementHTMLParser()
-
-    parser.feed(html)
-
-    if not parser.rows:
-
-        logger.error(
-            "Portal response contains no recognizable HTML table rows"
-        )
-
-        raise RuntimeError(
-            "PORTAL_HTML_HAS_NO_TABLE_ROWS"
-        )
-
-    logger.info(
-        "HTML parser found %s table rows",
-        len(parser.rows)
-    )
-
-    now = datetime.now(LOCAL_TZ)
-
-    tenders = []
-
-    for row in parser.rows:
-
-        try:
-
-            item = parse_announcement_row(row)
-
-            if not item:
-                continue
-
-            end_date = parse_date(
-                item.get("end_date")
-            )
-
-            if not end_date:
-                continue
-
-            if end_date <= now:
-                continue
-
-            tenders.append(item)
-
-        except Exception:
-
-            logger.exception(
-                "Failed to parse one announcement row"
-            )
-
-    tenders.sort(
-        key=lambda item: (
-            parse_date(item.get("end_date"))
-            or datetime.max.replace(tzinfo=LOCAL_TZ)
-        )
-    )
-
-    result = {
-        "ok": True,
-        "configured": True,
-        "items": tenders[:30],
-        "count": len(tenders[:30]),
-        "updated_at": datetime.now(LOCAL_TZ).isoformat(),
-        "source": SOURCE_URL
-    }
-
-    logger.info(
-        "Successfully processed %s active announcements",
-        len(tenders)
+    result["response_time_ms"] = round(
+        (time.monotonic() - started) * 1000
     )
 
     return result
 
 
-# =========================================================
-# MAIN PAGE
-# =========================================================
+class AnnouncementHTMLParser(HTMLParser):
+
+    def __init__(self):
+        super().__init__()
+        self.rows = []
+        self.current_row = None
+        self.current_cell = None
+        self.in_cell = False
+        self.in_link = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+
+        if tag == "tr":
+            self.current_row = {
+                "cells": [],
+                "links": []
+            }
+
+        elif tag in ("td", "th") and self.current_row is not None:
+            self.current_cell = ""
+            self.in_cell = True
+
+        elif tag == "a" and self.current_row is not None:
+            href = attrs.get("href", "")
+            self.current_row["links"].append({
+                "href": href,
+                "text": ""
+            })
+            self.in_link = True
+
+    def handle_data(self, data):
+        if self.current_row is None:
+            return
+
+        if self.in_cell:
+            self.current_cell += data
+
+        if self.in_link and self.current_row["links"]:
+            self.current_row["links"][-1]["text"] += data
+
+    def handle_endtag(self, tag):
+        if tag in ("td", "th") and self.in_cell:
+            self.current_row["cells"].append(
+                clean_text(self.current_cell)
+            )
+            self.current_cell = None
+            self.in_cell = False
+
+        elif tag == "a":
+            self.in_link = False
+
+        elif tag == "tr" and self.current_row is not None:
+            if self.current_row["cells"]:
+                self.rows.append(self.current_row)
+
+            self.current_row = None
+
+
+def extract_number(value):
+    match = re.search(r"\b\d{6,}-\d+\b", value or "")
+    return match.group(0) if match else None
+
+
+def extract_source_link(row):
+    for link in row.get("links", []):
+        href = link.get("href", "")
+
+        if not href:
+            continue
+
+        full_url = urljoin(SOURCE_URL, href)
+        parsed = urlparse(full_url)
+
+        if (
+            parsed.scheme == "https"
+            and (
+                parsed.hostname == SOURCE_HOST
+                or (
+                    parsed.hostname
+                    and parsed.hostname.endswith("." + SOURCE_HOST)
+                )
+            )
+        ):
+            return full_url
+
+    return SOURCE_URL
+
+
+def parse_announcement_row(row):
+    cells = row.get("cells", [])
+
+    if len(cells) < 7:
+        return None
+
+    number = extract_number(cells[0])
+
+    if not number:
+        return None
+
+    name = cells[1]
+    method = cells[2]
+    start_date = parse_date(cells[3])
+    end_date = parse_date(cells[4])
+    amount = parse_amount(cells[5])
+    status = cells[6]
+
+    combined_text = " ".join(cells)
+
+    organizer_match = re.search(
+        r"Организатор\s*:\s*(.*?)(?:Заказчик\s*:|$)",
+        combined_text,
+        re.IGNORECASE
+    )
+
+    organizer = (
+        clean_text(organizer_match.group(1))
+        if organizer_match
+        else None
+    )
+
+    return {
+        "number": number,
+        "name": name,
+        "method": method,
+        "organizer": organizer,
+        "start_date": start_date,
+        "end_date": end_date,
+        "amount": amount,
+        "status": status,
+        "url": extract_source_link(row),
+        "source": SOURCE_URL
+    }
+
+
+def download_portal_page():
+    request = urllib.request.Request(
+        SOURCE_URL,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 "
+                "(Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 "
+                "Chrome/120.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ru,en;q=0.8",
+            "Connection": "close"
+        }
+    )
+
+    context = create_ssl_context()
+
+    with urllib.request.urlopen(
+        request,
+        timeout=REQUEST_TIMEOUT,
+        context=context
+    ) as response:
+
+        if response.status != 200:
+            raise RuntimeError(
+                "PORTAL_HTTP_ERROR: " + str(response.status)
+            )
+
+        raw = response.read()
+
+        encoding = response.headers.get_content_charset() or "utf-8"
+
+        return raw.decode(encoding, errors="replace")
+
+
+def fetch_public_tenders():
+    html = download_portal_page()
+
+    parser = AnnouncementHTMLParser()
+    parser.feed(html)
+
+    if not parser.rows:
+        raise RuntimeError(
+            "NO_ANNOUNCEMENT_TABLE: структура страницы не распознана"
+        )
+
+    items = []
+
+    for row in parser.rows:
+        item = parse_announcement_row(row)
+
+        if not item:
+            continue
+
+        if item["end_date"]:
+            try:
+                deadline = datetime.fromisoformat(item["end_date"])
+                if deadline < datetime.now():
+                    continue
+            except ValueError:
+                pass
+
+        items.append(item)
+
+    if not items:
+        raise RuntimeError(
+            "NO_VALID_ANNOUNCEMENTS: объявления не распознаны"
+        )
+
+    items.sort(
+        key=lambda item: (
+            item["end_date"] is None,
+            item["end_date"] or ""
+        )
+    )
+
+    return {
+        "ok": True,
+        "configured": True,
+        "count": len(items[:30]),
+        "items": items[:30],
+        "source": SOURCE_URL,
+        "updated_at": now_local()
+    }
+
 
 @app.route("/")
 def index():
-
     return render_template("index.html")
 
 
-# =========================================================
-# TENDER API
-# =========================================================
+@app.route("/healthz")
+def healthz():
+    return jsonify({
+        "ok": True,
+        "service": "Kzzakupbot Hub",
+        "time": now_local()
+    })
 
-@app.route("/api/tenders", methods=["GET"])
+
+@app.route("/api/source-check")
+def source_check():
+    logger.info("Starting official procurement source diagnostics")
+
+    old_portal = check_source(
+        SOURCE_URL,
+        SOURCE_HOST
+    )
+
+    new_platform = check_source(
+        PLATFORM_URL,
+        PLATFORM_HOST
+    )
+
+    return jsonify({
+        "checked_at": now_local(),
+        "old_portal": old_portal,
+        "new_platform": new_platform,
+        "note": (
+            "Проверяется доступность HTTPS-страниц. "
+            "Успешное соединение само по себе "
+            "не подтверждает наличие публичного API."
+        )
+    })
+
+
+@app.route("/api/tenders")
 def api_tenders():
-
-    now = time.time()
+    current_time = time.time()
 
     if (
         _cache["data"] is not None
-        and now < _cache["expires"]
+        and current_time < _cache["expires"]
     ):
-
-        cached = dict(_cache["data"])
-        cached["cached"] = True
-
-        return jsonify(cached)
+        return jsonify(_cache["data"])
 
     try:
-
         data = fetch_public_tenders()
 
         _cache["data"] = data
-        _cache["expires"] = now + CACHE_SECONDS
+        _cache["expires"] = current_time + CACHE_SECONDS
 
-        return jsonify(data), 200
+        return jsonify(data)
 
     except Exception as error:
-
-        logger.exception(
-            "TENDER API: failed to load public announcements"
-        )
-
-        if _cache["data"] is not None:
-
-            stale_data = dict(_cache["data"])
-
-            stale_data["stale"] = True
-            stale_data["warning"] = str(error)
-
-            return jsonify(stale_data), 200
+        logger.exception("Tender portal request failed")
 
         return jsonify({
             "ok": False,
             "configured": True,
-            "items": [],
             "count": 0,
+            "items": [],
             "message": (
-                "Не удалось получить данные официального портала закупок."
+                "Не удалось получить данные "
+                "официального портала закупок."
             ),
             "details": str(error),
             "source": SOURCE_URL,
-            "updated_at": datetime.now(LOCAL_TZ).isoformat()
+            "updated_at": now_local()
         }), 502
 
 
-# =========================================================
-# HEALTH CHECK
-# =========================================================
-
-@app.route("/healthz")
-def healthz():
-
-    return jsonify({
-        "ok": True,
-        "service": "Kzzakupbot Hub",
-        "module": "TENDER LIVE",
-        "time": datetime.now(LOCAL_TZ).isoformat()
-    }), 200
-
-
-# =========================================================
-# START
-# =========================================================
-
 if __name__ == "__main__":
+    port = int(__import__("os").environ.get("PORT", 5000))
 
     app.run(
         host="0.0.0.0",
-        port=int(os.environ.get("PORT", 5000)),
+        port=port,
         debug=False
     )
